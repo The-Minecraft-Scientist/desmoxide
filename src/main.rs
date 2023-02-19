@@ -1,10 +1,8 @@
-use crate::parser::ParsingScope;
+mod ast;
 
-mod parser;
 mod render;
-
 fn main() {
     let in_str = include_str!("test.json");
-    let scope = ParsingScope::from_str(in_str).unwrap();
-    dbg!(scope.build_ast(&1).unwrap());
+    let graph = json::parse(in_str).unwrap()["state"].clone();
+    dbg!(&graph["expressions"]["list"][0]["latex"].as_str().unwrap().replace("\\left", "l"));
 }
