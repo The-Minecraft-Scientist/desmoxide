@@ -1,5 +1,5 @@
 [package]
-name = "desmoclient"
+name = "desmoparse"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,4 +7,3 @@ edition = "2021"
 
 [dependencies]
 json = "0.12.4"
-native-dialog = "0.6.3"
