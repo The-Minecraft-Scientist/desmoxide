@@ -81,8 +81,19 @@ impl<'a> TokenStream {
                     // collect chars into an &str for convenient matching
                     match cmd.as_str() {
                         "frac" => {
+                            tokens.push(LexerToken::Operator(DIV))
                         }
                         "cdot" => {
+                            tokens.push(LexerToken::Operator(MUL))
+                        }
+                        "cos" => {
+                            tokens.push(LexerToken::Operator(COS))
+                        }
+                        "sqrt" => {
+
+                        }
+                        "sin" => {
+                            tokens.push(LexerToken::Operator(SIN))
                         }
                         any => {
                             return Err(LexError::UnrecognizedLaTexCommand(any.to_string()))
@@ -95,6 +106,12 @@ impl<'a> TokenStream {
                         return Err(LexError::FloatParseError)
                     };
                     tokens.push(LexerToken::Value(DesmosVal::ConstNum(val)));
+                }
+                '(' => {
+                    tokens.push(LexerToken::Operator(LPARENS))
+                }
+                ')' => {
+                    tokens.push(LexerToken::Operator(RPARENS))
                 }
                 //Start of an indexing OR list declaration.
                 '[' => {
@@ -209,6 +226,7 @@ impl<'a> StrExt<'a> for String {
 
 pub trait PeekableExt {
     fn get_until_false(&mut self, filt: fn(&char) -> bool) -> Option<String>;
+    fn get_next_num(&mut self) -> Option<DesmosVal>;
 }
 impl<'a> PeekableExt for Peekable<Chars<'a>> {
     fn get_until_false(&mut self, filt: fn(&char) -> bool) -> Option<String> {
@@ -232,5 +250,9 @@ impl<'a> PeekableExt for Peekable<Chars<'a>> {
             };
         };
         Some(v.into_iter().collect::<String>())
+        
+    }
+    fn get_next_num(&mut self) -> Option<DesmosVal> {
+        None
     }
 }

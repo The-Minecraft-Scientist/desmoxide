@@ -6,3 +6,7 @@ pub const SUB: Opcode = Opcode::newl(10);
 pub const MUL: Opcode = Opcode::newl(20);
 pub const DIV: Opcode = Opcode::newl(20);
 pub const POW: Opcode = Opcode::newr(30);
+pub const COS: Opcode = Opcode::newr(30);
+pub const SIN: Opcode = Opcode::newr(30);
+pub const LPARENS: Opcode = Opcode::newr(30);
+pub const RPARENS: Opcode = Opcode::newr(30);
