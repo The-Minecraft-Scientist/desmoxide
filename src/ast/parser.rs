@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use logos::{Lexer, Logos};
+use logos::Logos;
 
 use crate::{lexer::Token, util::multipeek::IteratorExt};
 
