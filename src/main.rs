@@ -1,11 +1,6 @@
-mod ast;
-mod endpoint;
+use desmoparse::{ast::parser::Parser, lexer::Token};
+
 fn main() {
-    let in_str = include_str!("test.json");
-    let graph = json::parse(in_str).unwrap()["state"].clone();
-    dbg!(&graph["expressions"]["list"][0]["latex"].as_str().unwrap().replace("\\left", "l"));
-
-
-    let str = "test.hi.test2";
-    dbg!(str.split(".").collect::<Vec<&str>>());
+    let str = "y=2\\left(2x^{2}+1\\right)3-\\frac{2}{6} + {x=2: 1, 10}";
+    dbg!(Parser::new(vec![str.to_owned()]).expression_ast(0));
 }
