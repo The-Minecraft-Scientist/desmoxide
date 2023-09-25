@@ -1,4 +1,3 @@
-use std::cell::RefCell;
 pub struct MultiPeek<T: Iterator> {
     buffer: Vec<Option<<T as Iterator>::Item>>,
     iter: T,
@@ -20,12 +19,26 @@ impl<T: Iterator + Sized> MultiPeek<T> {
             buffer: Vec::with_capacity(size_hint),
         }
     }
-    pub fn peek(&mut self) -> &Option<T::Item> {
+    pub fn multipeek(&mut self) -> &Option<T::Item> {
         let value = self.iter.next();
         self.buffer.push(value);
         self.buffer.last().unwrap()
     }
+    pub fn peek_next<'a>(&'a mut self) -> &Option<T::Item> {
+        if self.buffer.len() == 0 {
+            let value = self.iter.next();
+            self.buffer.push(value);
+        }
+        self.buffer.last().unwrap()
+    }
+    pub fn push(&mut self, val: T::Item) {
+        self.buffer.push(Some(val))
+    }
+    pub fn inner(&self) -> &T {
+        &self.iter
+    }
 }
+
 impl<T: Iterator> Iterator for MultiPeek<T> {
     type Item = <T as Iterator>::Item;
 

@@ -1,6 +1,9 @@
-use desmoparse::{ast::parser::Parser, lexer::Token};
+use desmoparse::ast::parser::Parser;
 
 fn main() {
-    let str = "y=2\\left(2x^{2}+1\\right)3-\\frac{2}{6} + {x=2: 1, 10}";
-    dbg!(Parser::new(vec![str.to_owned()]).expression_ast(0));
+    let str = r"\psi = \psi_{s} + \psi_{p}";
+    let str1 = r"b = a(cb) + 12.2(2+b) + (l[i] + 2.5bc^{4+5})";
+    let p = Parser::new(vec![str.to_owned(), str1.to_owned()]);
+    //dbg!(p.line_lexer(1).collect::<Vec<_>>());
+    let _ = dbg!(p.expression_ast(1));
 }
