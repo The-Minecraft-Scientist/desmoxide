@@ -89,4 +89,10 @@ impl Token {
             _ => None,
         }
     }
+    pub fn is_comparison(&self) -> bool {
+        match self {
+            Self::Ge | Self::Gt | Self::Le | Self::Lt | Self::Eq => true,
+            _ => false,
+        }
+    }
 }

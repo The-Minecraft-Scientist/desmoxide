@@ -1,4 +1,5 @@
 #![allow(unused)]
+pub mod expression;
 pub mod parser;
 
 #[derive(Clone, Debug)]
@@ -40,6 +41,7 @@ pub enum Opcode {
     Lt,
     Index,
     Parens,
+    Comma,
     CoordSel,
 }
 use std::ops::Deref;

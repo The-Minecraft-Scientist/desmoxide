@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use logos::{Lexer, Logos};
 macro_rules! bad_token {
     ($s:expr, $t:expr) => {{
@@ -8,9 +10,16 @@ macro_rules! bad_token {
     }};
 }
 macro_rules! assert_next_token_eq {
-    ($l:expr, $e:expr) => {
-        assert_eq!($l.next().context("unexpected EOF")?.1, $e);
-    };
+    ($l:expr, $e:expr) => {{
+        let __token = $l.next().context("unexpected EOF")?;
+        if __token.1 != $e {
+            anyhow::bail!(
+                "Next token {:?} did not match expected token {:?}",
+                __token.1,
+                $e
+            );
+        }
+    }};
 }
 use crate::{
     ast::{Opcode, Value},
@@ -19,14 +28,19 @@ use crate::{
 };
 use anyhow::{Context, Result};
 
-use super::ASTNode;
+use super::{expression::ExpressionMeta, ASTNode};
 use anyhow::bail;
-pub struct Parser {
+
+pub struct Parser<'a> {
     pub storage: Vec<String>,
+    pub meta: HashMap<u32, ExpressionMeta<'a>>,
 }
-impl Parser {
+impl<'parser> Parser<'parser> {
     pub fn new(lines: Vec<String>) -> Self {
-        Self { storage: lines }
+        Self {
+            meta: HashMap::with_capacity(lines.len()),
+            storage: lines,
+        }
     }
     pub fn line_lexer<'a>(&'a self, line: usize) -> Lexer<'a, Token> {
         Token::lexer(&(self.storage[line]))
@@ -34,10 +48,10 @@ impl Parser {
     pub fn expression_ast<'a>(&'a self, expr: usize) -> Result<ASTNode<'a>> {
         let mut lexer = MultiPeek::new(LexIter::new(self.line_lexer(expr)));
         let (ident, Token::Ident) = lexer.next().context("Unexpected EOF")? else {
-            return None.context(" first token not an indentifier");
+            return bail!(" first token not an indentifier");
         };
         let (_, Token::Eq) = lexer.next().context("unexpected EOF")? else {
-            return None.context("second token not \"=\"");
+            bail!("second token not \"=\"");
         };
         self.recursive_parse_expr(&mut lexer, 0)
     }
@@ -46,7 +60,6 @@ impl Parser {
         lexer: &mut MultiPeek<LexIter<'a, Token>>,
         min_binding_power: u8,
     ) -> Result<ASTNode<'a>> {
-        println!("called");
         //get LHS token
         let mut next = lexer.next().context("unexpected EOF")?;
         dbg!(next);
@@ -83,7 +96,9 @@ impl Parser {
                 (_, t) if t.ends_scope() => {
                     break;
                 }
+                (_, Token::Comma) => Opcode::Comma,
                 (_, t) if t.is_value() => {
+                    //This is super jank but we unconditionally pop the lexer every iteration so...
                     lexer.push(("*", Token::Mul));
                     Opcode::Mul
                 }
@@ -129,21 +144,5 @@ impl Parser {
             break;
         }
         Ok(lhs)
-    }
-
-    fn djikstra_parse_expr<'a>(
-        &self,
-        lexer: &mut MultiPeek<LexIter<'a, Token>>,
-    ) -> Result<ASTNode<'a>> {
-        let mut opcode_stack: Vec<Opcode> = Vec::with_capacity(64);
-        let mut val_stack: Vec<Value> = Vec::with_capacity(64);
-        loop {
-            match lexer.next().context("unexpected EOF")? {
-                (s, Token::Ident) => val_stack.push(Value::Ident(s)),
-
-                (s, t) => bad_token!(s, t),
-            }
-        }
-        todo!()
     }
 }
