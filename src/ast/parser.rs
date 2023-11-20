@@ -62,7 +62,6 @@ impl<'parser> Parser<'parser> {
     ) -> Result<ASTNode<'a>> {
         //get LHS token
         let mut next = lexer.next().context("unexpected EOF")?;
-        dbg!(next);
         //Handle implicit multiplication (xyz = x * y * z)
         let mut lhs = match next {
             //Identifier
@@ -76,9 +75,14 @@ impl<'parser> Parser<'parser> {
                 vec![self.recursive_parse_expr(lexer, *Opcode::Neg.prefix_bp()?)?],
             ),
             //Handle unabiguous parenthesized statements (e.g. 1 + (2 + 3))
-            (_, t) if t.begins_scope().is_some() => {
+            (_, Token::LGroup) => {
                 let ret = self.recursive_parse_expr(lexer, 0)?;
-                assert_next_token_eq!(lexer, t.begins_scope().unwrap());
+                assert_next_token_eq!(lexer, Token::RGroup);
+                ret
+            }
+            (_, Token::LParen) => {
+                let ret = self.recursive_parse_expr(lexer, 0)?;
+                assert_next_token_eq!(lexer, Token::RParen);
                 ret
             }
             (s, t) => bad_token!(s, t, "getting lhs"),
