@@ -1,6 +1,7 @@
 use logos::{Lexer, Logos, Source};
 
 pub mod multipeek;
+pub mod thin_str;
 
 pub struct LexIter<'a, T: Logos<'a>> {
     lexer: Lexer<'a, T>,

@@ -49,6 +49,10 @@ pub enum Token {
     Dots,
     #[token(".")]
     Dot,
+    #[token("\\operatorname{for}")]
+    For,
+    #[token("\\sqrt")]
+    Sqrt,
     #[token("_", priority = 1)]
     Subscript,
     //Unrecognized LaTeX command; Treated as an identifer.

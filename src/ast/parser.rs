@@ -28,24 +28,24 @@ use crate::{
 };
 use anyhow::{Context, Result};
 
-use super::{expression::ExpressionMeta, ASTNode};
+use super::{expression::ExpressionMeta, ASTNode, ASTNodeType, Ident};
 use anyhow::bail;
 
 pub struct Parser<'a> {
     pub storage: Vec<String>,
     pub meta: HashMap<u32, ExpressionMeta<'a>>,
 }
-impl<'parser> Parser<'parser> {
+impl<'a> Parser<'a> {
     pub fn new(lines: Vec<String>) -> Self {
         Self {
             meta: HashMap::with_capacity(lines.len()),
             storage: lines,
         }
     }
-    pub fn line_lexer<'a>(&'a self, line: usize) -> Lexer<'a, Token> {
+    pub fn line_lexer(&'a self, line: usize) -> Lexer<'a, Token> {
         Token::lexer(&(self.storage[line]))
     }
-    pub fn expression_ast<'a>(&'a self, expr: usize) -> Result<ASTNode<'a>> {
+    pub fn expression_ast(&'a self, expr: usize) -> Result<ASTNode<'a>> {
         let mut lexer = MultiPeek::new(LexIter::new(self.line_lexer(expr)));
         let (ident, Token::Ident) = lexer.next().context("Unexpected EOF")? else {
             return bail!(" first token not an indentifier");
@@ -55,8 +55,8 @@ impl<'parser> Parser<'parser> {
         };
         self.recursive_parse_expr(&mut lexer, 0)
     }
-    pub fn recursive_parse_expr<'a>(
-        &self,
+    pub fn recursive_parse_expr(
+        &'a self,
         lexer: &mut MultiPeek<LexIter<'a, Token>>,
         min_binding_power: u8,
     ) -> Result<ASTNode<'a>> {
@@ -65,16 +65,16 @@ impl<'parser> Parser<'parser> {
         //Handle implicit multiplication (xyz = x * y * z)
         let mut lhs = match next {
             //Identifier
-            (s, Token::Ident) => ASTNode::Val(Value::Ident(s)),
+            (s, Token::Ident) => ASTNodeType::Val(s.into()).into(),
             //Static value
-            (_, Token::IntegerLit(i)) => ASTNode::Val(Value::Constant(i.into())),
-            (_, Token::FloatLit(f)) => ASTNode::Val(Value::Constant(f.into())),
+            (_, Token::IntegerLit(i)) => ASTNodeType::Val(i.into()).into(),
+            (_, Token::FloatLit(f)) => ASTNodeType::Val(f.into()).into(),
             //Prefix negation
-            (_, Token::Minus) => ASTNode::Op(
-                Opcode::Neg,
-                vec![self.recursive_parse_expr(lexer, *Opcode::Neg.prefix_bp()?)?],
-            ),
-            //Handle unabiguous parenthesized statements (e.g. 1 + (2 + 3))
+            (_, Token::Minus) => {
+                ASTNodeType::Neg(self.recursive_parse_expr(lexer, *Opcode::Neg.prefix_bp()?)?)
+                    .into()
+            }
+            //Handle unambiguous parenthesized statements (e.g. 1 + (2 + 3))
             (_, Token::LGroup) => {
                 let ret = self.recursive_parse_expr(lexer, 0)?;
                 assert_next_token_eq!(lexer, Token::RGroup);
