@@ -7,7 +7,7 @@ pub enum Token {
     #[regex("[0-9]*\\.[0-9]+", |lex| {lex.slice().parse().ok()})]
     FloatLit(f64),
     ///Integer literal
-    #[regex(r"\d+", |lex| {i64::from_str_radix(lex.slice(), 10).ok()})]
+    #[regex(r"\d+", |lex| {lex.slice().parse().ok()})]
     IntegerLit(i64),
 
     // IDENTIFIERS -----------------------------------------
@@ -127,20 +127,20 @@ impl Token {
         matches!(self, Self::FloatLit(_) | Self::IntegerLit(_) | Self::Ident)
     }
     pub fn ends_parse(&self) -> bool {
-        match self {
+        matches!(
+            self,
             Self::RGroup
-            | Self::For
-            | Self::RParen
-            | Self::Eq
-            | Self::Gt
-            | Self::Ge
-            | Self::Le
-            | Self::Lt
-            | Self::Colon
-            | Self::RBracket
-            | Self::Comma => true,
-            _ => false,
-        }
+                | Self::For
+                | Self::RParen
+                | Self::Eq
+                | Self::Gt
+                | Self::Ge
+                | Self::Le
+                | Self::Lt
+                | Self::Colon
+                | Self::RBracket
+                | Self::Comma
+        )
     }
     pub fn is_trig(&self) -> bool {
         matches!(
