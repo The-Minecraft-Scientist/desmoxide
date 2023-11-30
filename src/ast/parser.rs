@@ -1,9 +1,11 @@
 use std::collections::HashMap;
 
 use logos::{Lexer, Logos};
-use serde_json::de;
 use thin_vec::{thin_vec, ThinVec};
 
+use anyhow::{bail, Context, Result};
+
+use super::{expression::ExpressionMeta, ASTNode, ASTNodeType, Ident, ListCompInfo};
 use crate::{
     assert_next_token_eq,
     ast::{Opcode, Value},
@@ -11,10 +13,6 @@ use crate::{
     lexer::Token,
     util::{multipeek::MultiPeek, LexIter},
 };
-use anyhow::{Context, Result};
-
-use super::{expression::ExpressionMeta, ASTNode, ASTNodeType, Ident, ListCompInfo};
-use anyhow::bail;
 
 pub struct Parser<'a> {
     pub storage: Vec<String>,
@@ -104,7 +102,12 @@ impl<'a> Parser<'a> {
             }
         })
     }
-    pub fn recursive_parse_expr(
+    fn gather_list_multi_args(
+        parser: &'a Parser,
+        lexer: &mut MultiPeek<LexIter<Token>>,
+    ) -> ThinVec<ASTNode<'a>> {
+    }
+    fn recursive_parse_expr(
         &'a self,
         lexer: &mut MultiPeek<LexIter<'a, Token>>,
         min_binding_power: u8,
@@ -124,8 +127,6 @@ impl<'a> Parser<'a> {
                     .into()
             }
             // Handle unambiguous parenthesized or grouped statements (e.g. 1 + (2 + 3))
-            // Not sure if "{" needs to have this behavior since it typically only appears inside of
-            // latex commands, which all have custom logic
             Token::LGroup => {
                 let ret = self.recursive_parse_expr(lexer, 0)?;
                 assert_next_token_eq!(lexer, Token::RGroup);
@@ -153,6 +154,7 @@ impl<'a> Parser<'a> {
                 assert_next_token_eq!(lexer, Token::RParen);
                 ASTNode::new_trig(t, inner)?
             }
+            t if t.is_list_multi_arg() => {}
             t => bad_token!(next.0, t, "getting lhs"),
         };
 
@@ -168,8 +170,9 @@ impl<'a> Parser<'a> {
                 Token::LParen => Opcode::Parens,
                 Token::Dot => {
                     let n = lexer.next().context("unexpected EOF")?;
-                    lhs.can_be_list();
-                    continue;
+                    if lhs.can_be_list() {};
+
+                    todo!()
                 }
                 Token::Range => {
                     let _ = lexer.next().context("unexpected EOF")?;

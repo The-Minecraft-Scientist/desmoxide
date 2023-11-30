@@ -122,51 +122,48 @@ pub enum Token {
     #[token("\\cot^{-1}")]
     InvCot,
 }
-impl Token {
-    pub fn is_value(&self) -> bool {
-        matches!(self, Self::FloatLit(_) | Self::IntegerLit(_) | Self::Ident)
-    }
-    pub fn ends_parse(&self) -> bool {
-        matches!(
-            self,
-            Self::RGroup
-                | Self::For
-                | Self::RParen
-                | Self::Eq
-                | Self::Gt
-                | Self::Ge
-                | Self::Le
-                | Self::Lt
-                | Self::Colon
-                | Self::RBracket
-                | Self::Comma
-        )
-    }
-    pub fn is_trig(&self) -> bool {
-        matches!(
-            self,
-            Self::Sin
-                | Self::Cos
-                | Self::Tan
-                | Self::Csc
-                | Self::Sec
-                | Self::Cot
-                | Self::InvSin
-                | Self::InvCos
-                | Self::InvTan
-                | Self::InvCsc
-                | Self::InvSec
-                | Self::InvCot
-        )
-    }
-    pub fn begins_scope(&self) -> Option<Token> {
-        match self {
-            Self::LParen => Some(Self::RParen),
-            Self::LGroup => Some(Self::RGroup),
-            _ => None,
+pub use categories::*;
+mod categories {
+    use super::Token;
+    use super::Token::*;
+    impl Token {
+        pub fn is_value(&self) -> bool {
+            matches!(self, FloatLit(_) | IntegerLit(_) | Ident)
         }
-    }
-    pub fn is_comparison(&self) -> bool {
-        matches!(self, Self::Ge | Self::Gt | Self::Le | Self::Lt | Self::Eq)
+        pub fn ends_parse(&self) -> bool {
+            matches!(
+                self,
+                RGroup | For | RParen | Eq | Gt | Ge | Le | Lt | Colon | RBracket | Comma
+            )
+        }
+        pub fn is_trig(&self) -> bool {
+            matches!(
+                self,
+                Sin | Cos
+                    | Tan
+                    | Csc
+                    | Sec
+                    | Cot
+                    | InvSin
+                    | InvCos
+                    | InvTan
+                    | InvCsc
+                    | InvSec
+                    | InvCot
+            )
+        }
+        pub fn is_list_multi_arg(&self) -> bool {
+            matches!(self, Min | Max | Count | Total | Join | Length)
+        }
+        pub fn begins_scope(&self) -> Option<Token> {
+            match self {
+                LParen => Some(RParen),
+                LGroup => Some(RGroup),
+                _ => None,
+            }
+        }
+        pub fn is_comparison(&self) -> bool {
+            matches!(self, Ge | Gt | Le | Lt | Eq)
+        }
     }
 }

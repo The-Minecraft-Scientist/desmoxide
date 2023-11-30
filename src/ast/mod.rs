@@ -1,13 +1,13 @@
-#![allow(unused)]
+//#![allow(unused)]
 pub mod expression;
 pub mod parser;
-use std::ops::{Deref, DerefMut};
 
+use crate::util::thin_str::ThinStr;
 pub use bp::*;
+use std::ops::{Deref, DerefMut};
 use thin_vec::ThinVec;
 pub use trig::*;
 
-use crate::{lexer::Token, util::thin_str::ThinStr};
 #[derive(Debug, Clone)]
 pub struct ASTNode<'a>(Box<ASTNodeType<'a>>);
 impl<'a> ASTNode<'a> {

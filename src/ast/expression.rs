@@ -1,4 +1,4 @@
-use super::{Opcode, Value};
+use super::Opcode;
 
 #[derive(Debug, Clone)]
 pub struct ExpressionMeta<'a> {
