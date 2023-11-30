@@ -46,21 +46,21 @@ pub enum Token {
     #[token(":")]
     Colon,
     #[token("...")]
-    Dots,
+    Range,
     #[token(".")]
     Dot,
     #[token("\\operatorname{for}")]
     For,
     #[token("\\sqrt")]
     Sqrt,
-    #[token("_", priority = 1)]
+    #[token("_", priority = 0)]
     Subscript,
     //Unrecognized LaTeX command; Treated as an identifer.
     #[regex(r"\\[a-zA-Z]+(_\{[a-zA-Z]+\})?")]
     //Single letter
     #[regex("[a-zA-Z]")]
     //name with subscript:
-    #[regex(r"[a-zA-Z]_\{[a-zA-Z]+\}")]
+    #[regex(r"[a-zA-Z]_\{[a-zA-Z0-9\.]+\}", priority = 0)]
     /// Variable identifier
     Ident,
 }
@@ -71,7 +71,7 @@ impl Token {
             _ => false,
         }
     }
-    pub fn ends_scope(&self) -> bool {
+    pub fn ends_parse(&self) -> bool {
         match self {
             Self::RGroup
             | Self::RParen
@@ -81,7 +81,8 @@ impl Token {
             | Self::Le
             | Self::Lt
             | Self::Colon
-            | Self::RBracket => true,
+            | Self::RBracket
+            | Self::Comma => true,
             _ => false,
         }
     }

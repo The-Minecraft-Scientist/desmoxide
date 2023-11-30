@@ -4,33 +4,29 @@ pub mod parser;
 #[derive(Debug, Clone)]
 pub struct ASTNode<'a>(Box<ASTNodeType<'a>>);
 impl<'a> ASTNode<'a> {
-    pub fn from_opcode_args<const N: usize>(op: Opcode, args: [ASTNode<'a>; N]) -> Self {
+    pub fn new_opcode_2arg(op: Opcode, arg0: ASTNode<'a>, arg1: ASTNode<'a>) -> Self {
         match op {
             Opcode::Add => {
                 //2 arguments
-                const _: () = assert!(N == 2);
-                ASTNodeType::Add(args[0], args[1]).into()
+                ASTNodeType::Add(arg0, arg1).into()
             }
             Opcode::Sub => {
                 //2 arguments
-                const _: () = assert!(N == 2);
-                ASTNodeType::Sub(args[0], args[1]).into()
+                ASTNodeType::Sub(arg0, arg1).into()
             }
             Opcode::Mul => {
                 //2 arguments
-                const _: () = assert!(N == 2);
-                ASTNodeType::Mul(args[0], args[1]).into()
+                ASTNodeType::Mul(arg0, arg1).into()
             }
             Opcode::Div => {
                 //2 arguments
-                const _: () = assert!(N == 2);
-                ASTNodeType::Div(args[0], args[1]).into()
+                ASTNodeType::Div(arg0, arg1).into()
             }
             Opcode::Pow => {
                 //2 arguments
-                const _: () = assert!(N == 2);
-                ASTNodeType::Pow(args[0], args[1]).into()
+                ASTNodeType::Pow(arg0, arg1).into()
             }
+            _ => panic!("not a 2 arg operation"),
         }
     }
 }
@@ -62,17 +58,24 @@ pub enum ASTNodeType<'a> {
     Neg(ASTNode<'a>),
     Sqrt(ASTNode<'a>),
 
-    Parens(Ident<'a>, ASTNode<'a>),
-    Index(Ident<'a>, ASTNode<'a>),
-    ListComp(ASTNode<'a>, Ident<'a>),
-    //Op(Opcode, Vec<ASTNode<'a>>),
+    Parens(Ident<'a>, ASTNode<'a>), // Ambiguous case, either multiplication by juxtaposition or a function call
+    Index(ASTNode<'a>, ASTNode<'a>), // List indexing operations
+
+    ListCompList(ASTNode<'a>, ListCompInfo<'a>), // List defined by a list comphrehension inner member stored in the child node
+    NodeList(ThinVec<ASTNode<'a>>),              // List defined by a vector of AST nodes
+    RangeList(ASTNode<'a>, ASTNode<'a>),         // List defined by a range of values
 }
+impl<'a> ASTNodeType<'a> {
+    pub fn is_list(&self) -> bool {
+        match self {
+            Self::ListCompList(_, _) | Self::NodeList(_) | Self::RangeList(_, _) => true,
+            _ => false,
+        }
+    }
+}
+#[derive(Debug, Clone)]
 pub struct ListCompInfo<'a> {
-    vars: Vec<(Ident<'a>, ASTNode<'a>)>,
-}
-pub enum ListLit<'a> {
-    Simple(Vec<Value<'a>>),
-    WithAST(Vec<ASTNode<'a>>),
+    vars: ThinVec<(Ident<'a>, ASTNode<'a>)>,
 }
 
 #[derive(Clone, Debug)]
@@ -82,7 +85,6 @@ pub enum Value<'a> {
     ConstantF64(f64),
 }
 #[derive(Clone, Debug)]
-#[repr(transparent)]
 pub struct Ident<'a>(ThinStr<'a>);
 
 impl From<i64> for Value<'_> {
@@ -97,7 +99,12 @@ impl From<f64> for Value<'_> {
 }
 impl<'a> From<&'a str> for Value<'a> {
     fn from(value: &'a str) -> Self {
-        Value::Ident(Ident(value.into()))
+        Value::Ident(value.into())
+    }
+}
+impl<'a> From<&'a str> for Ident<'a> {
+    fn from(value: &'a str) -> Self {
+        Ident(value.into())
     }
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -121,6 +128,7 @@ pub enum Opcode {
 use std::ops::{Deref, DerefMut};
 
 pub use bp::*;
+use thin_vec::ThinVec;
 
 use crate::util::thin_str::ThinStr;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
