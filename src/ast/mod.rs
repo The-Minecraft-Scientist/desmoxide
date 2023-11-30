@@ -5,6 +5,7 @@ use std::ops::{Deref, DerefMut};
 
 pub use bp::*;
 use thin_vec::ThinVec;
+pub use trig::*;
 
 use crate::{lexer::Token, util::thin_str::ThinStr};
 #[derive(Debug, Clone)]
@@ -42,23 +43,23 @@ mod trig {
     use crate::lexer::Token;
     use crate::lexer::Token::*;
 
-    use super::{ASTNode, ASTNodeType};
+    use super::{ASTNode, ASTNodeType as AN};
 
     impl<'a> ASTNode<'a> {
         pub fn new_trig(token: Token, inner: ASTNode<'a>) -> Result<Self> {
             Ok(match token {
-                Sin => ASTNodeType::Sin(inner),
-                Cos => ASTNodeType::Cos(inner),
-                Tan => ASTNodeType::Tan(inner),
-                Csc => ASTNodeType::Csc(inner),
-                Sec => ASTNodeType::Sec(inner),
-                Cot => ASTNodeType::Cot(inner),
-                InvSin => ASTNodeType::InvSin(inner),
-                InvCos => ASTNodeType::InvCos(inner),
-                InvTan => ASTNodeType::InvTan(inner),
-                InvCsc => ASTNodeType::InvCsc(inner),
-                InvSec => ASTNodeType::InvSec(inner),
-                InvCot => ASTNodeType::InvCot(inner),
+                Sin => AN::Sin(inner),
+                Cos => AN::Cos(inner),
+                Tan => AN::Tan(inner),
+                Csc => AN::Csc(inner),
+                Sec => AN::Sec(inner),
+                Cot => AN::Cot(inner),
+                InvSin => AN::InvSin(inner),
+                InvCos => AN::InvCos(inner),
+                InvTan => AN::InvTan(inner),
+                InvCsc => AN::InvCsc(inner),
+                InvSec => AN::InvSec(inner),
+                InvCot => AN::InvCot(inner),
                 t => bail!("token {:?} is not a trig builtin", t),
             }
             .into())

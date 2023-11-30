@@ -1,5 +1,6 @@
 use logos::{Lexer, Logos, Source};
 
+pub mod macros;
 pub mod multipeek;
 pub mod thin_str;
 

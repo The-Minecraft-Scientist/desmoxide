@@ -3,28 +3,11 @@ use std::collections::HashMap;
 use logos::{Lexer, Logos};
 use serde_json::de;
 use thin_vec::{thin_vec, ThinVec};
-macro_rules! bad_token {
-    ($s:expr, $t:expr) => {{
-        anyhow::bail!("bad token {:?} at {:?}", $t, $s.char_indices())
-    }};
-    ($s:expr, $t:expr, $msg:expr) => {{
-        anyhow::bail!("bad token {:?} at {:?}: {}", $t, $s.char_indices(), $msg)
-    }};
-}
-macro_rules! assert_next_token_eq {
-    ($l:expr, $e:expr) => {{
-        let __token = $l.next().context("unexpected EOF")?;
-        if __token.1 != $e {
-            anyhow::bail!(
-                "Next token {:?} did not match expected token {:?}",
-                __token.1,
-                $e
-            );
-        }
-    }};
-}
+
 use crate::{
+    assert_next_token_eq,
     ast::{Opcode, Value},
+    bad_token,
     lexer::Token,
     util::{multipeek::MultiPeek, LexIter},
 };
@@ -185,9 +168,8 @@ impl<'a> Parser<'a> {
                 Token::LParen => Opcode::Parens,
                 Token::Dot => {
                     let n = lexer.next().context("unexpected EOF")?;
-                    if lhs.can_be_list() || {
-                        
-                    }
+                    if lhs.can_be_list() {}
+                    continue;
                 }
                 Token::Range => {
                     let _ = lexer.next().context("unexpected EOF")?;
