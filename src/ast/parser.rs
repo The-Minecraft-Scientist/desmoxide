@@ -33,7 +33,7 @@ impl<'a> Parser<'a> {
     pub fn expression_ast(&'a self, expr: usize) -> Result<ASTNode<'a>> {
         let mut lexer = MultiPeek::new(LexIter::new(self.line_lexer(expr)));
         let (ident, Token::Ident) = lexer.next().context("Unexpected EOF")? else {
-            return bail!(" first token not an indentifier");
+            bail!(" first token not an indentifier");
         };
         let (st, Token::Eq) = lexer.next().context("unexpected EOF")? else {
             bail!("second token not \"=\"");

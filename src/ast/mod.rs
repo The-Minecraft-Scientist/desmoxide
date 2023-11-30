@@ -141,19 +141,16 @@ pub enum DotAccess {
 }
 impl<'a> ASTNodeType<'a> {
     pub fn can_be_list(&self) -> bool {
-        match self {
+        matches!(
+            self,
             Self::ListCompList(_, _)
-            | Self::NodeList(_)
-            | Self::RangeList(_, _)
-            | Self::Val(Value::Ident(_)) => true,
-            _ => false,
-        }
+                | Self::NodeList(_)
+                | Self::RangeList(_, _)
+                | Self::Val(Value::Ident(_))
+        )
     }
     pub fn is_point(&self) -> bool {
-        let Self::Point(_, _) = self else {
-            return false;
-        };
-        true
+        matches!(self, Self::Point(_, _))
     }
 }
 #[derive(Debug, Clone)]

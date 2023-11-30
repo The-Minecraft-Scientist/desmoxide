@@ -124,10 +124,7 @@ pub enum Token {
 }
 impl Token {
     pub fn is_value(&self) -> bool {
-        match self {
-            Self::FloatLit(_) | Self::IntegerLit(_) | Self::Ident => true,
-            _ => false,
-        }
+        matches!(self, Self::FloatLit(_) | Self::IntegerLit(_) | Self::Ident)
     }
     pub fn ends_parse(&self) -> bool {
         match self {
@@ -146,21 +143,21 @@ impl Token {
         }
     }
     pub fn is_trig(&self) -> bool {
-        match self {
+        matches!(
+            self,
             Self::Sin
-            | Self::Cos
-            | Self::Tan
-            | Self::Csc
-            | Self::Sec
-            | Self::Cot
-            | Self::InvSin
-            | Self::InvCos
-            | Self::InvTan
-            | Self::InvCsc
-            | Self::InvSec
-            | Self::InvCot => true,
-            _ => false,
-        }
+                | Self::Cos
+                | Self::Tan
+                | Self::Csc
+                | Self::Sec
+                | Self::Cot
+                | Self::InvSin
+                | Self::InvCos
+                | Self::InvTan
+                | Self::InvCsc
+                | Self::InvSec
+                | Self::InvCot
+        )
     }
     pub fn begins_scope(&self) -> Option<Token> {
         match self {
@@ -170,9 +167,6 @@ impl Token {
         }
     }
     pub fn is_comparison(&self) -> bool {
-        match self {
-            Self::Ge | Self::Gt | Self::Le | Self::Lt | Self::Eq => true,
-            _ => false,
-        }
+        matches!(self, Self::Ge | Self::Gt | Self::Le | Self::Lt | Self::Eq)
     }
 }
