@@ -24,8 +24,8 @@ impl<T: Iterator + Sized> MultiPeek<T> {
         self.buffer.push(value);
         self.buffer.last().unwrap()
     }
-    pub fn peek_next<'a>(&'a mut self) -> &Option<T::Item> {
-        if self.buffer.len() == 0 {
+    pub fn peek_next(&mut self) -> &Option<T::Item> {
+        if self.buffer.is_empty() {
             let value = self.iter.next();
             self.buffer.push(value);
         }

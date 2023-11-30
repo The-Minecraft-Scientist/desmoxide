@@ -153,7 +153,7 @@ impl<'a> ASTNodeType<'a> {
         let Self::Point(_, _) = self else {
             return false;
         };
-        return true;
+        true
     }
 }
 #[derive(Debug, Clone)]

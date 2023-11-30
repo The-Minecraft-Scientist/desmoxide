@@ -168,7 +168,7 @@ impl<'a> Parser<'a> {
                 Token::LParen => Opcode::Parens,
                 Token::Dot => {
                     let n = lexer.next().context("unexpected EOF")?;
-                    if lhs.can_be_list() {}
+                    lhs.can_be_list();
                     continue;
                 }
                 Token::Range => {

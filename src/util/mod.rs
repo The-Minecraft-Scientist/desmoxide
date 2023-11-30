@@ -19,7 +19,7 @@ where
     type Item = (&'a <<T as Logos<'a>>::Source as Source>::Slice, T);
 
     fn next(&mut self) -> Option<Self::Item> {
-        let n = self.lexer.next()?.map_err(|e| e).ok()?;
+        let n = self.lexer.next()?.ok()?;
         Some((self.lexer.slice(), n))
     }
 }
