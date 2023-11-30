@@ -164,6 +164,12 @@ impl<'a> Parser<'a> {
                 ASTNodeType::Div(numerator, denominator).into()
             }
             Token::LBracket => Self::handle_list(self, lexer)?,
+            t if t.is_trig() => {
+                assert_next_token_eq!(lexer, Token::LParen);
+                let inner = self.recursive_parse_expr(lexer, 0)?;
+                assert_next_token_eq!(lexer, Token::RParen);
+                ASTNode::new_trig(t, inner)?
+            }
             t => bad_token!(next.0, t, "getting lhs"),
         };
 
@@ -176,6 +182,13 @@ impl<'a> Parser<'a> {
                 Token::Mul => Opcode::Mul,
                 Token::Pow => Opcode::Pow,
                 Token::LBracket => Opcode::Index,
+                Token::LParen => Opcode::Parens,
+                Token::Dot => {
+                    let n = lexer.next().context("unexpected EOF")?;
+                    if lhs.can_be_list() || {
+                        
+                    }
+                }
                 Token::Range => {
                     let _ = lexer.next().context("unexpected EOF")?;
                     //Immediately return
@@ -183,17 +196,15 @@ impl<'a> Parser<'a> {
                         ASTNodeType::RangeList(lhs, self.recursive_parse_expr(lexer, 0)?).into(),
                     );
                 }
-                t if t.ends_parse() => {
-                    break;
-                }
-                Token::Comma => Opcode::Comma,
-                //Remind me to fix this later
+                //TODO: fix this jankery
                 t if t.is_value() => {
                     //This is super jank but we unconditionally pop the lexer every iteration so...
                     lexer.push(("*", Token::Mul));
                     Opcode::Mul
                 }
-                Token::LParen => Opcode::Parens,
+                t if t.ends_parse() => {
+                    break;
+                }
                 t => bad_token!(a.0, t, "getting opcode"),
             };
             if let Ok(bp) = op.postfix_bp() {
@@ -215,7 +226,7 @@ impl<'a> Parser<'a> {
                         assert_next_token_eq!(lexer, Token::RParen);
                         lhs = ASTNodeType::Mul(lhs, rhs).into();
                     }
-                    (Opcode::Index, node) if node.can_be_indexed() => {
+                    (Opcode::Index, node) if node.can_be_list() => {
                         let rhs = self.recursive_parse_expr(lexer, 0)?;
                         assert_next_token_eq!(lexer, Token::RBracket);
                         lhs = ASTNodeType::Index(lhs, rhs).into();

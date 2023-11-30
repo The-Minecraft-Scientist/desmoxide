@@ -1,6 +1,12 @@
 #![allow(unused)]
 pub mod expression;
 pub mod parser;
+use std::ops::{Deref, DerefMut};
+
+pub use bp::*;
+use thin_vec::ThinVec;
+
+use crate::{lexer::Token, util::thin_str::ThinStr};
 #[derive(Debug, Clone)]
 pub struct ASTNode<'a>(Box<ASTNodeType<'a>>);
 impl<'a> ASTNode<'a> {
@@ -30,6 +36,35 @@ impl<'a> ASTNode<'a> {
         }
     }
 }
+mod trig {
+    use anyhow::{bail, Result};
+
+    use crate::lexer::Token;
+    use crate::lexer::Token::*;
+
+    use super::{ASTNode, ASTNodeType};
+
+    impl<'a> ASTNode<'a> {
+        pub fn new_trig(token: Token, inner: ASTNode<'a>) -> Result<Self> {
+            Ok(match token {
+                Sin => ASTNodeType::Sin(inner),
+                Cos => ASTNodeType::Cos(inner),
+                Tan => ASTNodeType::Tan(inner),
+                Csc => ASTNodeType::Csc(inner),
+                Sec => ASTNodeType::Sec(inner),
+                Cot => ASTNodeType::Cot(inner),
+                InvSin => ASTNodeType::InvSin(inner),
+                InvCos => ASTNodeType::InvCos(inner),
+                InvTan => ASTNodeType::InvTan(inner),
+                InvCsc => ASTNodeType::InvCsc(inner),
+                InvSec => ASTNodeType::InvSec(inner),
+                InvCot => ASTNodeType::InvCot(inner),
+                t => bail!("token {:?} is not a trig builtin", t),
+            }
+            .into())
+        }
+    }
+}
 impl<'a> Deref for ASTNode<'a> {
     type Target = ASTNodeType<'a>;
 
@@ -55,6 +90,7 @@ pub enum ASTNodeType<'a> {
     Mul(ASTNode<'a>, ASTNode<'a>),
     Div(ASTNode<'a>, ASTNode<'a>),
     Pow(ASTNode<'a>, ASTNode<'a>),
+    // Unary operators
     Neg(ASTNode<'a>),
     Sqrt(ASTNode<'a>),
 
@@ -64,9 +100,46 @@ pub enum ASTNodeType<'a> {
     ListCompList(ASTNode<'a>, ListCompInfo<'a>), // List defined by a list comphrehension inner member stored in the child node
     NodeList(ThinVec<ASTNode<'a>>),              // List defined by a vector of AST nodes
     RangeList(ASTNode<'a>, ASTNode<'a>),         // List defined by a range of values
+
+    Point(ASTNode<'a>, ASTNode<'a>),
+
+    //Trigonometric functions
+    Sin(ASTNode<'a>),
+    Cos(ASTNode<'a>),
+    Tan(ASTNode<'a>),
+    Csc(ASTNode<'a>),
+    Sec(ASTNode<'a>),
+    Cot(ASTNode<'a>),
+    InvSin(ASTNode<'a>),
+    InvCos(ASTNode<'a>),
+    InvTan(ASTNode<'a>),
+    InvCsc(ASTNode<'a>),
+    InvSec(ASTNode<'a>),
+    InvCot(ASTNode<'a>),
+    //List builtins
+    Min(ThinVec<ASTNode<'a>>),
+    Max(ThinVec<ASTNode<'a>>),
+    Count(ThinVec<ASTNode<'a>>),
+    Total(ThinVec<ASTNode<'a>>),
+    Join(ThinVec<ASTNode<'a>>),
+    Length(ThinVec<ASTNode<'a>>),
+    // 2 argument sort is optional
+    Sort(ASTNode<'a>, Option<ASTNode<'a>>),
+    // Seed argument is optional
+    Shuffle(ASTNode<'a>, Option<ASTNode<'a>>),
+    Unique(ASTNode<'a>),
+    // Random can be called with 0, 1, or 2 arguments
+    Random(Option<(ASTNode<'a>, Option<ASTNode<'a>>)>),
+    DotAccess(ASTNode<'a>, DotAccess),
+}
+#[derive(Clone, Copy, Debug)]
+pub enum DotAccess {
+    DotAccessX,
+    DotAccessY,
+    DotAccessZ,
 }
 impl<'a> ASTNodeType<'a> {
-    pub fn can_be_indexed(&self) -> bool {
+    pub fn can_be_list(&self) -> bool {
         match self {
             Self::ListCompList(_, _)
             | Self::NodeList(_)
@@ -74,6 +147,12 @@ impl<'a> ASTNodeType<'a> {
             | Self::Val(Value::Ident(_)) => true,
             _ => false,
         }
+    }
+    pub fn is_point(&self) -> bool {
+        let Self::Point(_, _) = self else {
+            return false;
+        };
+        return true;
     }
 }
 #[derive(Debug, Clone)]
@@ -110,6 +189,7 @@ impl<'a> From<&'a str> for Ident<'a> {
         Ident(value.into())
     }
 }
+//Opcode structure for simple in/pre/postfix operators
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Opcode {
     Add,
@@ -123,17 +203,10 @@ pub enum Opcode {
     Gt,
     Lt,
     Index,
-    ListComp,
     Parens,
     Comma,
     CoordSel,
 }
-use std::ops::{Deref, DerefMut};
-
-pub use bp::*;
-use thin_vec::ThinVec;
-
-use crate::util::thin_str::ThinStr;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct InfixBP {
     left: u8,

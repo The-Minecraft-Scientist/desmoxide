@@ -7,7 +7,7 @@ pub enum Token {
     #[regex("[0-9]*\\.[0-9]+", |lex| {lex.slice().parse().ok()})]
     FloatLit(f64),
     ///Integer literal
-    #[regex("\\d*", |lex| {i64::from_str_radix(lex.slice(), 10).ok()})]
+    #[regex(r"\d+", |lex| {i64::from_str_radix(lex.slice(), 10).ok()})]
     IntegerLit(i64),
 
     // IDENTIFIERS -----------------------------------------
@@ -58,7 +58,7 @@ pub enum Token {
     #[token("\\div")]
     #[token("/")]
     Div,
-    #[token("+")]
+    #[regex(r"\++")]
     Plus,
     #[token("-")]
     Minus,
@@ -75,6 +75,8 @@ pub enum Token {
     Sqrt,
 
     // BUILTINS --------------------------------------------
+    #[token("\\operatorname{random}")]
+    Random,
     #[token("\\min")]
     Min,
     #[token("\\max")]
@@ -83,6 +85,8 @@ pub enum Token {
     Count,
     #[token("\\operatorname{total}")]
     Total,
+    #[token("\\operatorname{length}")]
+    Length,
     #[token("\\operatorname{join}")]
     Join,
     #[token("\\operatorname{sort}")]
@@ -138,6 +142,23 @@ impl Token {
             | Self::Colon
             | Self::RBracket
             | Self::Comma => true,
+            _ => false,
+        }
+    }
+    pub fn is_trig(&self) -> bool {
+        match self {
+            Self::Sin
+            | Self::Cos
+            | Self::Tan
+            | Self::Csc
+            | Self::Sec
+            | Self::Cot
+            | Self::InvSin
+            | Self::InvCos
+            | Self::InvTan
+            | Self::InvCsc
+            | Self::InvSec
+            | Self::InvCot => true,
             _ => false,
         }
     }
