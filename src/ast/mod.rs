@@ -66,9 +66,12 @@ pub enum ASTNodeType<'a> {
     RangeList(ASTNode<'a>, ASTNode<'a>),         // List defined by a range of values
 }
 impl<'a> ASTNodeType<'a> {
-    pub fn is_list(&self) -> bool {
+    pub fn can_be_indexed(&self) -> bool {
         match self {
-            Self::ListCompList(_, _) | Self::NodeList(_) | Self::RangeList(_, _) => true,
+            Self::ListCompList(_, _)
+            | Self::NodeList(_)
+            | Self::RangeList(_, _)
+            | Self::Val(Value::Ident(_)) => true,
             _ => false,
         }
     }
