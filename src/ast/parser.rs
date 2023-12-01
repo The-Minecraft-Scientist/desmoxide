@@ -56,7 +56,6 @@ impl<'a> Parser<'a> {
             assert_next_token_eq!(lexer, Token::RBracket);
             return Ok(l.clone());
         }
-        dbg!(next_token);
         Ok(match next_token.1 {
             Token::Comma => {
                 let mut vars = ThinVec::with_capacity(10);
@@ -134,7 +133,6 @@ impl<'a> Parser<'a> {
     ) -> Result<List<'a>> {
         assert_next_token_eq!(lexer, Token::LParen);
         let next_token = lexer.peek_next().context("unexpected EOF")?;
-        dbg!(next_token);
         //Empty list
         if next_token.1 == Token::RParen {
             lexer.discard()?;
@@ -231,7 +229,6 @@ impl<'a> Parser<'a> {
         //Loop across this level
         loop {
             let Some(a) = *lexer.peek_next() else { break };
-            dbg!(a);
             let op = match a.1 {
                 Token::Plus => Opcode::Add,
                 Token::Minus => Opcode::Sub,
@@ -242,7 +239,6 @@ impl<'a> Parser<'a> {
                 Token::Dot => {
                     lexer.discard()?;
                     let id = lexer.next_res()?;
-                    dbg!(id);
                     if let Token::Ident = id.1 {
                         lexer.discard()?;
                         if !lhs.can_be_point() {
