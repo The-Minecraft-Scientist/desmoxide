@@ -1,3 +1,5 @@
+use anyhow::{bail, Context, Result};
+
 pub struct MultiPeek<T: Iterator> {
     buffer: Vec<Option<<T as Iterator>::Item>>,
     iter: T,
@@ -36,6 +38,13 @@ impl<T: Iterator + Sized> MultiPeek<T> {
     }
     pub fn inner(&self) -> &T {
         &self.iter
+    }
+    pub fn discard(&mut self) -> Result<()> {
+        let _ = self.next_res()?;
+        Ok(())
+    }
+    pub fn next_res(&mut self) -> Result<T::Item> {
+        self.next().context("unexpected EOF")
     }
 }
 

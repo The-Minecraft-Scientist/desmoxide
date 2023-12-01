@@ -30,10 +30,10 @@ impl<'a> Parser<'a> {
     }
     pub fn expression_ast(&'a self, expr: usize) -> Result<ASTNode<'a>> {
         let mut lexer = MultiPeek::new(LexIter::new(self.line_lexer(expr)));
-        let (ident, Token::Ident) = lexer.next().context("Unexpected EOF")? else {
+        let (ident, Token::Ident) = lexer.next_res()? else {
             bail!(" first token not an indentifier");
         };
-        let (st, Token::Eq) = lexer.next().context("unexpected EOF")? else {
+        let (st, Token::Eq) = lexer.next_res()? else {
             bail!("second token not \"=\"");
         };
         self.recursive_parse_expr(&mut lexer, 0)
@@ -45,7 +45,7 @@ impl<'a> Parser<'a> {
         let next_token = lexer.peek_next().context("unexpected EOF")?;
         //Empty list
         if next_token.1 == Token::RBracket {
-            let _ = lexer.next().context("unexpected EOF")?;
+            lexer.discard()?;
             //empty list
             return Ok(List::List(ThinVec::new()));
         }
@@ -62,7 +62,7 @@ impl<'a> Parser<'a> {
                 let mut vars = ThinVec::with_capacity(10);
                 vars.push(first_scope);
                 loop {
-                    match lexer.next().context("unexpected EOF")? {
+                    match lexer.next_res()? {
                         //We reached the last item
                         (_, Token::RBracket) => break,
                         // Normal, continue to the next item
@@ -90,7 +90,7 @@ impl<'a> Parser<'a> {
         let next_token = lexer.peek_next().context("unexpected EOF")?;
         //Empty list
         if next_token.1 == Token::RParen {
-            let _ = lexer.next().context("unexpected EOF")?;
+            lexer.discard()?;
             //empty list
             return Ok(List::List(ThinVec::new()));
         }
@@ -107,7 +107,7 @@ impl<'a> Parser<'a> {
             Token::Comma => {
                 vars.push(first_scope);
                 loop {
-                    match lexer.next().context("unexpected EOF")? {
+                    match lexer.next_res()? {
                         //We reached the last item
                         (_, Token::RParen) => break,
                         // Normal, continue to the next item
@@ -137,7 +137,7 @@ impl<'a> Parser<'a> {
         dbg!(next_token);
         //Empty list
         if next_token.1 == Token::RParen {
-            let _ = lexer.next().context("unexpected EOF")?;
+            lexer.discard()?;
             //empty list
             return Ok(List::List(ThinVec::new()));
         }
@@ -153,7 +153,7 @@ impl<'a> Parser<'a> {
             Token::Comma => {
                 vars.push(first_scope);
                 loop {
-                    match lexer.next().context("unexpected EOF")? {
+                    match lexer.next_res()? {
                         //We reached the last item
                         (_, Token::RParen) => break,
                         // Normal, continue to the next item
@@ -179,7 +179,7 @@ impl<'a> Parser<'a> {
         min_binding_power: u8,
     ) -> Result<ASTNode<'a>> {
         //get LHS token
-        let next = lexer.next().context("unexpected EOF")?;
+        let next = lexer.next_res()?;
         //Handle implicit multiplication (xyz = x * y * z)
         let mut lhs = match next.1 {
             //Identifier
@@ -195,8 +195,8 @@ impl<'a> Parser<'a> {
             // TODO: piecewise functions
             Token::LGroup => {
                 let ret = self.recursive_parse_expr(lexer, 0)?;
-                assert_next_token_eq!(lexer, Token::RGroup);
-                todo!("piecewises not yet implemented");
+                let next = lexer.peek_next().context("unexpected EOF")?;
+                {}
                 ret
             }
             Token::LParen => {
@@ -240,11 +240,11 @@ impl<'a> Parser<'a> {
                 Token::LBracket => Opcode::Index,
                 Token::LParen => Opcode::Parens,
                 Token::Dot => {
-                    let _ = lexer.next().context("unexpected EOF")?;
-                    let id = lexer.next().context("unexpected EOF")?;
+                    lexer.discard()?;
+                    let id = lexer.next_res()?;
                     dbg!(id);
                     if let Token::Ident = id.1 {
-                        let _ = lexer.next().context("unexpected EOF")?;
+                        lexer.discard()?;
                         if !lhs.can_be_point() {
                             bail!("cannot get coordinate of a number")
                         }
@@ -276,7 +276,7 @@ impl<'a> Parser<'a> {
                     todo!()
                 }
                 Token::Range => {
-                    let _ = lexer.next().context("unexpected EOF")?;
+                    lexer.discard()?;
                     //Immediately return
                     return Ok(ASTNodeType::List(List::Range(
                         lhs,
@@ -286,7 +286,7 @@ impl<'a> Parser<'a> {
                 }
                 //List comp
                 Token::For => {
-                    let _ = lexer.next().context("unexpected EOF")?;
+                    lexer.discard()?;
                     //LHS is the expression to be run
                     let mut vars: ThinVec<(Ident<'a>, ASTNode<'a>)> = ThinVec::with_capacity(2);
                     loop {
@@ -294,13 +294,13 @@ impl<'a> Parser<'a> {
                         else {
                             break;
                         };
-                        let _ = lexer.next().context("unexpected EOF")?;
+                        lexer.discard()?;
                         assert_next_token_eq!(lexer, Token::Eq);
                         vars.push((id.into(), self.recursive_parse_expr(lexer, 0)?));
                         if lexer.peek_next().context("unexpected EOF")?.1 != Token::Comma {
                             break;
                         } else {
-                            let _ = lexer.next().context("unexpected EOF")?;
+                            lexer.discard()?;
                         }
                     }
                     lhs = ASTNodeType::List(List::ListComp(lhs, ListCompInfo { vars })).into();
