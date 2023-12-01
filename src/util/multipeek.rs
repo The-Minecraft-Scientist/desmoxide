@@ -1,4 +1,4 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 
 pub struct MultiPeek<T: Iterator> {
     buffer: Vec<Option<<T as Iterator>::Item>>,

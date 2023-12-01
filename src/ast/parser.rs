@@ -8,7 +8,7 @@ use anyhow::{bail, Context, Result};
 use super::{expression::ExpressionMeta, ASTNode, ASTNodeType, DotAccess::*, Ident, ListCompInfo};
 use crate::{
     assert_next_token_eq,
-    ast::{DotAccess, List, Opcode, Value},
+    ast::{List, Opcode, Value},
     bad_token,
     lexer::Token,
     util::{multipeek::MultiPeek, LexIter},
@@ -30,10 +30,10 @@ impl<'a> Parser<'a> {
     }
     pub fn expression_ast(&'a self, expr: usize) -> Result<ASTNode<'a>> {
         let mut lexer = MultiPeek::new(LexIter::new(self.line_lexer(expr)));
-        let (ident, Token::Ident) = lexer.next_res()? else {
+        let (_ident, Token::Ident) = lexer.next_res()? else {
             bail!(" first token not an indentifier");
         };
-        let (st, Token::Eq) = lexer.next_res()? else {
+        let (_st, Token::Eq) = lexer.next_res()? else {
             bail!("second token not \"=\"");
         };
         self.recursive_parse_expr(&mut lexer, 0)
@@ -193,7 +193,7 @@ impl<'a> Parser<'a> {
             // TODO: piecewise functions
             Token::LGroup => {
                 let ret = self.recursive_parse_expr(lexer, 0)?;
-                let next = lexer.peek_next().context("unexpected EOF")?;
+                let _next = lexer.peek_next().context("unexpected EOF")?;
                 {}
                 ret
             }
