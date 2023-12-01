@@ -5,10 +5,10 @@ use thin_vec::{thin_vec, ThinVec};
 
 use anyhow::{bail, Context, Result};
 
-use super::{expression::ExpressionMeta, ASTNode, ASTNodeType, Ident, ListCompInfo};
+use super::{expression::ExpressionMeta, ASTNode, ASTNodeType, DotAccess::*, Ident, ListCompInfo};
 use crate::{
     assert_next_token_eq,
-    ast::{Opcode, Value},
+    ast::{DotAccess, List, Opcode, Value},
     bad_token,
     lexer::Token,
     util::{multipeek::MultiPeek, LexIter},
@@ -38,49 +38,29 @@ impl<'a> Parser<'a> {
         };
         self.recursive_parse_expr(&mut lexer, 0)
     }
-    fn handle_list(
+    fn parse_list_body(
         parser: &'a Self,
         lexer: &mut MultiPeek<LexIter<'a, Token>>,
-    ) -> Result<ASTNode<'a>> {
+    ) -> Result<List<'a>> {
         let next_token = lexer.peek_next().context("unexpected EOF")?;
-        dbg!(next_token);
         //Empty list
         if next_token.1 == Token::RBracket {
             let _ = lexer.next().context("unexpected EOF")?;
             //empty list
-            return Ok(ASTNodeType::NodeList(ThinVec::new()).into());
+            return Ok(List::List(ThinVec::new()));
         }
         let first_scope = parser.recursive_parse_expr(lexer, 0)?;
         let next_token = lexer.peek_next().context("unexpected EOF")?;
         //Range list ([0...3])
-        if let ASTNodeType::RangeList(_, _) = &*first_scope {
+        if let ASTNodeType::List(l) = &*first_scope {
             assert_next_token_eq!(lexer, Token::RBracket);
-            return Ok(first_scope);
+            return Ok(l.clone());
         }
+        dbg!(next_token);
         Ok(match next_token.1 {
-            //List comprehension list
-            Token::For => {
-                let _ = lexer.next().context("unexpected EOF")?;
-                //LHS is the expression to be run
-                let mut v: ThinVec<(Ident<'a>, ASTNode<'a>)> = ThinVec::with_capacity(2);
-                loop {
-                    let (id, Token::Ident) = lexer.peek_next().context("unexpected EOF")? else {
-                        break;
-                    };
-                    let _ = lexer.next().context("unexpected EOF")?;
-                    assert_next_token_eq!(lexer, Token::Eq);
-                    v.push((id.into(), parser.recursive_parse_expr(lexer, 0)?));
-                    if lexer.peek_next().context("unexpected EOF")?.1 != Token::Comma {
-                        break;
-                    } else {
-                        let _ = lexer.next().context("unexpected EOF")?;
-                    }
-                }
-                ASTNodeType::ListCompList(first_scope, ListCompInfo { vars: v }).into()
-            }
-            //Multi element list
             Token::Comma => {
-                let mut v = ThinVec::with_capacity(10);
+                let mut vars = ThinVec::with_capacity(10);
+                vars.push(first_scope);
                 loop {
                     match lexer.next().context("unexpected EOF")? {
                         //We reached the last item
@@ -91,21 +71,107 @@ impl<'a> Parser<'a> {
                             bad_token!(s, t, "parsing list")
                         }
                     }
-                    v.push(parser.recursive_parse_expr(lexer, 0)?)
+                    vars.push(parser.recursive_parse_expr(lexer, 0)?)
                 }
-                ASTNodeType::NodeList(v).into()
+                List::List(vars)
             }
             //Single element list
-            Token::RBracket => ASTNodeType::NodeList(thin_vec![first_scope]).into(),
+            Token::RBracket => List::List(thin_vec![first_scope]),
             t => {
                 bad_token!(next_token.0, t, "parsing list")
             }
         })
     }
-    fn gather_list_multi_args(
-        parser: &'a Parser,
-        lexer: &mut MultiPeek<LexIter<Token>>,
-    ) -> ThinVec<ASTNode<'a>> {
+    ///Special case handling for min, max, count, total and join
+    fn parse_autojoin_args(
+        parser: &'a Self,
+        lexer: &mut MultiPeek<LexIter<'a, Token>>,
+    ) -> Result<List<'a>> {
+        let next_token = lexer.peek_next().context("unexpected EOF")?;
+        //Empty list
+        if next_token.1 == Token::RParen {
+            let _ = lexer.next().context("unexpected EOF")?;
+            //empty list
+            return Ok(List::List(ThinVec::new()));
+        }
+        let first_scope = parser.recursive_parse_expr(lexer, 0)?;
+        let next_token = lexer.peek_next().context("unexpected EOF")?;
+        let mut vars = ThinVec::with_capacity(10);
+        //Range list ([0...3])
+        if let ASTNodeType::List(l) = &*first_scope {
+            if next_token.1 == Token::RParen {
+                return Ok(l.clone());
+            }
+        }
+        Ok(match next_token.1 {
+            Token::Comma => {
+                vars.push(first_scope);
+                loop {
+                    match lexer.next().context("unexpected EOF")? {
+                        //We reached the last item
+                        (_, Token::RParen) => break,
+                        // Normal, continue to the next item
+                        (_, Token::Comma) => {}
+                        (s, t) => {
+                            bad_token!(s, t, "parsing list")
+                        }
+                    }
+                    vars.push(parser.recursive_parse_expr(lexer, 0)?)
+                }
+                List::List(vars)
+            }
+            //Single element list
+            Token::RParen => List::List(thin_vec![first_scope]),
+            t => {
+                bad_token!(next_token.0, t, "parsing list")
+            }
+        })
+    }
+    fn parse_autojoin_args_suffix(
+        parser: &'a Self,
+        lexer: &mut MultiPeek<LexIter<'a, Token>>,
+        mut vars: ThinVec<ASTNode<'a>>,
+    ) -> Result<List<'a>> {
+        assert_next_token_eq!(lexer, Token::LParen);
+        let next_token = lexer.peek_next().context("unexpected EOF")?;
+        dbg!(next_token);
+        //Empty list
+        if next_token.1 == Token::RParen {
+            let _ = lexer.next().context("unexpected EOF")?;
+            //empty list
+            return Ok(List::List(ThinVec::new()));
+        }
+        let first_scope = parser.recursive_parse_expr(lexer, 0)?;
+        let next_token = lexer.peek_next().context("unexpected EOF")?;
+        //Range list ([0...3])
+        if let ASTNodeType::List(l) = &*first_scope {
+            if next_token.1 == Token::RParen {
+                return Ok(l.clone());
+            }
+        }
+        Ok(match next_token.1 {
+            Token::Comma => {
+                vars.push(first_scope);
+                loop {
+                    match lexer.next().context("unexpected EOF")? {
+                        //We reached the last item
+                        (_, Token::RParen) => break,
+                        // Normal, continue to the next item
+                        (_, Token::Comma) => {}
+                        (s, t) => {
+                            bad_token!(s, t, "parsing list")
+                        }
+                    }
+                    vars.push(parser.recursive_parse_expr(lexer, 0)?)
+                }
+                List::List(vars)
+            }
+            //Single element list
+            Token::RParen => List::List(thin_vec![first_scope]),
+            t => {
+                bad_token!(next_token.0, t, "parsing list")
+            }
+        })
     }
     fn recursive_parse_expr(
         &'a self,
@@ -113,7 +179,7 @@ impl<'a> Parser<'a> {
         min_binding_power: u8,
     ) -> Result<ASTNode<'a>> {
         //get LHS token
-        let mut next = lexer.next().context("unexpected EOF")?;
+        let next = lexer.next().context("unexpected EOF")?;
         //Handle implicit multiplication (xyz = x * y * z)
         let mut lhs = match next.1 {
             //Identifier
@@ -126,10 +192,11 @@ impl<'a> Parser<'a> {
                 ASTNodeType::Neg(self.recursive_parse_expr(lexer, *Opcode::Neg.prefix_bp()?)?)
                     .into()
             }
-            // Handle unambiguous parenthesized or grouped statements (e.g. 1 + (2 + 3))
+            // TODO: piecewise functions
             Token::LGroup => {
                 let ret = self.recursive_parse_expr(lexer, 0)?;
                 assert_next_token_eq!(lexer, Token::RGroup);
+                todo!("piecewises not yet implemented");
                 ret
             }
             Token::LParen => {
@@ -147,20 +214,24 @@ impl<'a> Parser<'a> {
                 assert_next_token_eq!(lexer, Token::RGroup);
                 ASTNodeType::Div(numerator, denominator).into()
             }
-            Token::LBracket => Self::handle_list(self, lexer)?,
+            Token::LBracket => ASTNodeType::List(Self::parse_list_body(self, lexer)?).into(),
             t if t.is_trig() => {
                 assert_next_token_eq!(lexer, Token::LParen);
                 let inner = self.recursive_parse_expr(lexer, 0)?;
                 assert_next_token_eq!(lexer, Token::RParen);
-                ASTNode::new_trig(t, inner)?
+                ASTNode::new_simple_with_node(t, inner)?
             }
-            t if t.is_list_multi_arg() => {}
+            t if t.should_autojoin_args() => {
+                let arg = Self::parse_autojoin_args(self, lexer)?;
+                ASTNode::new_autojoin_fn(t, arg)?
+            }
             t => bad_token!(next.0, t, "getting lhs"),
         };
 
         //Loop across this level
         loop {
             let Some(a) = *lexer.peek_next() else { break };
+            dbg!(a);
             let op = match a.1 {
                 Token::Plus => Opcode::Add,
                 Token::Minus => Opcode::Sub,
@@ -169,17 +240,71 @@ impl<'a> Parser<'a> {
                 Token::LBracket => Opcode::Index,
                 Token::LParen => Opcode::Parens,
                 Token::Dot => {
-                    let n = lexer.next().context("unexpected EOF")?;
-                    if lhs.can_be_list() {};
+                    let _ = lexer.next().context("unexpected EOF")?;
+                    let id = lexer.next().context("unexpected EOF")?;
+                    dbg!(id);
+                    if let Token::Ident = id.1 {
+                        let _ = lexer.next().context("unexpected EOF")?;
+                        if !lhs.can_be_point() {
+                            bail!("cannot get coordinate of a number")
+                        }
+                        let a = match id.0 {
+                            "x" => DotAccessX,
+                            "y" => DotAccessY,
+                            "z" => DotAccessZ,
+                            s => {
+                                bail!("unexpected ident \"{}\" in dot accessor!", s)
+                            }
+                        };
+                        lhs = ASTNodeType::DotAccess(lhs, a).into();
+                        continue;
+                    }
+                    if !id.1.suffix_call_allowed() {
+                        bail!("cannot call builtin {:?} as a suffix", id.1)
+                    }
+                    // Handle list function calls in suffix position (e.g. [1,2,3].sort()   )
+                    if id.1.should_autojoin_args() && lhs.can_be_list() {
+                        let mut vars = ThinVec::with_capacity(10);
+                        vars.push(lhs);
+                        lhs = ASTNode::new_autojoin_fn(
+                            id.1,
+                            Self::parse_autojoin_args_suffix(self, lexer, vars)?,
+                        )?;
+                        continue;
+                    }
 
                     todo!()
                 }
                 Token::Range => {
                     let _ = lexer.next().context("unexpected EOF")?;
                     //Immediately return
-                    return Ok(
-                        ASTNodeType::RangeList(lhs, self.recursive_parse_expr(lexer, 0)?).into(),
-                    );
+                    return Ok(ASTNodeType::List(List::Range(
+                        lhs,
+                        self.recursive_parse_expr(lexer, 0)?,
+                    ))
+                    .into());
+                }
+                //List comp
+                Token::For => {
+                    let _ = lexer.next().context("unexpected EOF")?;
+                    //LHS is the expression to be run
+                    let mut vars: ThinVec<(Ident<'a>, ASTNode<'a>)> = ThinVec::with_capacity(2);
+                    loop {
+                        let (id, Token::Ident) = lexer.peek_next().context("unexpected EOF")?
+                        else {
+                            break;
+                        };
+                        let _ = lexer.next().context("unexpected EOF")?;
+                        assert_next_token_eq!(lexer, Token::Eq);
+                        vars.push((id.into(), self.recursive_parse_expr(lexer, 0)?));
+                        if lexer.peek_next().context("unexpected EOF")?.1 != Token::Comma {
+                            break;
+                        } else {
+                            let _ = lexer.next().context("unexpected EOF")?;
+                        }
+                    }
+                    lhs = ASTNodeType::List(List::ListComp(lhs, ListCompInfo { vars })).into();
+                    continue;
                 }
                 //TODO: fix this jankery
                 t if t.is_value() => {

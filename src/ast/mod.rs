@@ -3,50 +3,27 @@ pub mod expression;
 pub mod parser;
 
 use crate::util::thin_str::ThinStr;
+//Re-export stuff from private scopes (used to keep enum import clutter down)
+pub use ast_impl::*;
+pub use ast_node_impl::*;
 pub use bp::*;
+
 use std::ops::{Deref, DerefMut};
 use thin_vec::ThinVec;
-pub use trig::*;
 
 #[derive(Debug, Clone)]
 pub struct ASTNode<'a>(Box<ASTNodeType<'a>>);
-impl<'a> ASTNode<'a> {
-    pub fn new_opcode_2arg(op: Opcode, arg0: ASTNode<'a>, arg1: ASTNode<'a>) -> Self {
-        match op {
-            Opcode::Add => {
-                //2 arguments
-                ASTNodeType::Add(arg0, arg1).into()
-            }
-            Opcode::Sub => {
-                //2 arguments
-                ASTNodeType::Sub(arg0, arg1).into()
-            }
-            Opcode::Mul => {
-                //2 arguments
-                ASTNodeType::Mul(arg0, arg1).into()
-            }
-            Opcode::Div => {
-                //2 arguments
-                ASTNodeType::Div(arg0, arg1).into()
-            }
-            Opcode::Pow => {
-                //2 arguments
-                ASTNodeType::Pow(arg0, arg1).into()
-            }
-            _ => panic!("not a 2 arg operation"),
-        }
-    }
-}
-mod trig {
+
+mod ast_impl {
     use anyhow::{bail, Result};
 
     use crate::lexer::Token;
     use crate::lexer::Token::*;
 
-    use super::{ASTNode, ASTNodeType as AN};
+    use super::{ASTNode, ASTNodeType as AN, List, Opcode as OP};
 
     impl<'a> ASTNode<'a> {
-        pub fn new_trig(token: Token, inner: ASTNode<'a>) -> Result<Self> {
+        pub fn new_simple_with_node(token: Token, inner: ASTNode<'a>) -> Result<Self> {
             Ok(match token {
                 Sin => AN::Sin(inner),
                 Cos => AN::Cos(inner),
@@ -64,8 +41,30 @@ mod trig {
             }
             .into())
         }
+        pub fn new_autojoin_fn(token: Token, arg: List<'a>) -> Result<Self> {
+            Ok(match token {
+                Min => AN::Min(arg),
+                Max => AN::Max(arg),
+                Count => AN::Count(arg),
+                Total => AN::Total(arg),
+                Join => AN::Join(arg),
+                t => bail!("token {:?} does not autojoin its arguments", t),
+            }
+            .into())
+        }
+        pub fn new_opcode_2arg(op: OP, arg0: ASTNode<'a>, arg1: ASTNode<'a>) -> Self {
+            match op {
+                OP::Add => AN::Add(arg0, arg1).into(),
+                OP::Sub => AN::Sub(arg0, arg1).into(),
+                OP::Mul => AN::Mul(arg0, arg1).into(),
+                OP::Div => AN::Div(arg0, arg1).into(),
+                OP::Pow => AN::Pow(arg0, arg1).into(),
+                _ => panic!("not a 2 arg operation"),
+            }
+        }
     }
 }
+
 impl<'a> Deref for ASTNode<'a> {
     type Target = ASTNodeType<'a>;
 
@@ -83,6 +82,7 @@ impl<'a> From<ASTNodeType<'a>> for ASTNode<'a> {
         ASTNode(Box::new(value))
     }
 }
+
 #[derive(Clone, Debug)]
 pub enum ASTNodeType<'a> {
     Val(Value<'a>),
@@ -98,10 +98,7 @@ pub enum ASTNodeType<'a> {
     Parens(Ident<'a>, ASTNode<'a>), // Ambiguous case, either multiplication by juxtaposition or a function call
     Index(ASTNode<'a>, ASTNode<'a>), // List indexing operations
 
-    ListCompList(ASTNode<'a>, ListCompInfo<'a>), // List defined by a list comphrehension inner member stored in the child node
-    NodeList(ThinVec<ASTNode<'a>>),              // List defined by a vector of AST nodes
-    RangeList(ASTNode<'a>, ASTNode<'a>),         // List defined by a range of values
-
+    List(List<'a>), //List
     Point(ASTNode<'a>, ASTNode<'a>),
 
     //Trigonometric functions
@@ -118,39 +115,56 @@ pub enum ASTNodeType<'a> {
     InvSec(ASTNode<'a>),
     InvCot(ASTNode<'a>),
     //List builtins
-    Min(ThinVec<ASTNode<'a>>),
-    Max(ThinVec<ASTNode<'a>>),
-    Count(ThinVec<ASTNode<'a>>),
-    Total(ThinVec<ASTNode<'a>>),
-    Join(ThinVec<ASTNode<'a>>),
-    Length(ThinVec<ASTNode<'a>>),
+    Min(List<'a>),
+    Max(List<'a>),
+    Count(List<'a>),
+    Total(List<'a>),
+    Join(List<'a>),
+    Length(ASTNode<'a>),
     // 2 argument sort is optional
-    Sort(ASTNode<'a>, Option<ASTNode<'a>>),
+    Sort(List<'a>, Option<ASTNode<'a>>),
     // Seed argument is optional
-    Shuffle(ASTNode<'a>, Option<ASTNode<'a>>),
-    Unique(ASTNode<'a>),
+    Shuffle(List<'a>, Option<ASTNode<'a>>),
+    Unique(List<'a>),
     // Random can be called with 0, 1, or 2 arguments
     Random(Option<(ASTNode<'a>, Option<ASTNode<'a>>)>),
     DotAccess(ASTNode<'a>, DotAccess),
 }
+#[derive(Debug, Clone)]
+pub enum List<'a> {
+    ListComp(ASTNode<'a>, ListCompInfo<'a>), // List defined by a list comphrehension inner member stored in the child node
+    Range(ASTNode<'a>, ASTNode<'a>),         // List defined by a vector of AST nodes
+    List(ThinVec<ASTNode<'a>>),              // List defined by a range of values
+}
+
 #[derive(Clone, Copy, Debug)]
 pub enum DotAccess {
     DotAccessX,
     DotAccessY,
     DotAccessZ,
 }
-impl<'a> ASTNodeType<'a> {
-    pub fn can_be_list(&self) -> bool {
-        matches!(
-            self,
-            Self::ListCompList(_, _)
-                | Self::NodeList(_)
-                | Self::RangeList(_, _)
-                | Self::Val(Value::Ident(_))
-        )
-    }
-    pub fn is_point(&self) -> bool {
-        matches!(self, Self::Point(_, _))
+mod ast_node_impl {
+
+    use super::ASTNodeType;
+    use super::ASTNodeType::*;
+
+    impl<'a> ASTNodeType<'a> {
+        pub fn can_be_list(&self) -> bool {
+            matches!(
+                self,
+                List(_)
+                    | Val(super::Value::Ident(_))
+                    | Min(_)
+                    | Max(_)
+                    | Count(_)
+                    | Total(_)
+                    | Join(_)
+                    | Length(_)
+            )
+        }
+        pub fn can_be_point(&self) -> bool {
+            matches!(self, Point(_, _) | Val(super::Value::Ident(_)))
+        }
     }
 }
 #[derive(Debug, Clone)]

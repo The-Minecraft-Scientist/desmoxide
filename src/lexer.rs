@@ -152,8 +152,13 @@ mod categories {
                     | InvCot
             )
         }
-        pub fn is_list_multi_arg(&self) -> bool {
+        pub fn suffix_call_allowed(&self) -> bool {
+            //TODO: this should be exhaustive
             matches!(self, Min | Max | Count | Total | Join | Length)
+        }
+        pub fn should_autojoin_args(&self) -> bool {
+            //TODO: this is probably not exhaustive either
+            matches!(self, Min | Max | Count | Total | Join)
         }
         pub fn begins_scope(&self) -> Option<Token> {
             match self {
