@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{cell::RefCell, collections::HashMap};
 
 use logos::{Lexer, Logos};
 use thin_vec::{thin_vec, ThinVec};
@@ -16,18 +16,19 @@ use crate::{
 
 pub struct Parser<'a> {
     pub storage: Vec<String>,
-    pub meta: HashMap<u32, ExpressionMeta<'a>>,
+    pub meta: RefCell<HashMap<u32, ExpressionMeta<'a>>>,
 }
 impl<'a> Parser<'a> {
     pub fn new(lines: Vec<String>) -> Self {
         Self {
-            meta: HashMap::with_capacity(lines.len()),
+            meta: RefCell::new(HashMap::with_capacity(lines.len())),
             storage: lines,
         }
     }
     pub fn line_lexer(&'a self, line: usize) -> Lexer<'a, Token> {
         Token::lexer(&(self.storage[line]))
     }
+    pub fn compile_line(&'a self, lex: &mut MultiPeek<LexIter<'a, Token>>) {}
     pub fn expression_ast(&'a self, expr: usize) -> Result<ASTNode<'a>> {
         let mut lexer = MultiPeek::new(LexIter::new(self.line_lexer(expr)));
         let (_ident, Token::Ident) = lexer.next_res()? else {
@@ -269,7 +270,7 @@ impl<'a> Parser<'a> {
                         continue;
                     }
 
-                    todo!()
+                    todo!("Not all dot functions yet implemented")
                 }
                 Token::Range => {
                     lexer.discard()?;
