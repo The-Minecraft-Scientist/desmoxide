@@ -8,9 +8,9 @@ fn main() -> Result<()> {
     let str3 = r"L_{1}=\frac{1}{0}";
     let str4 = r"L_{2}=[i \operatorname{for} i = [1...3]].\operatorname{join}([1...3], 2, 4)";
     let p: Parser = Parser::new(vec![]);
-    {
-        let t = p.expression_ast(2);
-    }
+
+    let t = p.expression_ast(2);
+
     //dbg!(p.line_lexer(2).collect::<Vec<_>>());
 
     Ok(())

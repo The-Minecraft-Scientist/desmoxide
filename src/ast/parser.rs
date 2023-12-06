@@ -19,7 +19,7 @@ pub struct Parser<'a> {
     pub meta: RefCell<HashMap<u32, ExpressionMeta<'a>>>,
 }
 impl<'a> Parser<'a> {
-    pub fn new(lines: Vec<String>) -> Self {
+    pub fn new(lines: Vec<String>) -> Parser<'a> {
         Self {
             meta: RefCell::new(HashMap::with_capacity(lines.len())),
             storage: lines,
