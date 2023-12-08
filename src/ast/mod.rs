@@ -3,7 +3,7 @@ pub mod expression;
 pub mod parser;
 
 use crate::util::thin_str::ThinStr;
-//Re-export stuff from private scopes (used to keep enum import clutter down)
+//Re-export stuff from private scopes (used to keep enum name collisions down)
 pub use ast_impl::*;
 pub use ast_node_impl::*;
 pub use bp::*;
