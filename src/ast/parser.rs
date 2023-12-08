@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap};
+use std::{cell::RefCell, collections::HashMap, fmt::format};
 
 use logos::{Lexer, Logos};
 use thin_vec::{thin_vec, ThinVec};
@@ -15,22 +15,30 @@ use crate::{
 };
 
 pub struct Parser<'a> {
-    pub storage: &'a [String],
-    pub meta: RefCell<HashMap<u32, ExpressionMeta<'a>>>,
+    pub storage: &'a HashMap<usize, String>,
+    pub meta: RefCell<HashMap<usize, ExpressionMeta<'a>>>,
 }
 impl<'a> Parser<'a> {
-    pub fn new(lines: &'a [String]) -> Self {
+    pub fn new(lines: &'a HashMap<usize, String>) -> Self {
         Self {
             meta: RefCell::new(HashMap::with_capacity(lines.len())),
             storage: lines,
         }
     }
-    pub fn line_lexer(&self, line: usize) -> Lexer<'a, Token> {
-        Token::lexer(self.storage[line].as_str())
+    pub fn line_lexer(&self, line: usize) -> Result<Lexer<'a, Token>> {
+        Ok(Token::lexer(
+            self.storage
+                .get(&line)
+                .context(format!("line with ID {} not found!", line))?
+                .as_str(),
+        ))
     }
     //pub fn compile_line(&'a self, lex: &mut MultiPeek<LexIter<'a, Token>>) {}
+    pub fn parse_all(&self) -> Result<()> {
+        Ok(())
+    }
     pub fn expression_ast(&self, expr: usize) -> Result<ASTNode<'a>> {
-        let mut lexer = MultiPeek::new(LexIter::new(self.line_lexer(expr)));
+        let mut lexer = MultiPeek::new(LexIter::new(self.line_lexer(expr)?));
         let (_ident, Token::Ident) = lexer.next_res()? else {
             bail!(" first token not an indentifier");
         };
