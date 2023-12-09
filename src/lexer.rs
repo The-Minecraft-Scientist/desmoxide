@@ -44,26 +44,26 @@ pub enum Token {
     // COMPARISON OPERATORS --------------------------------
     #[token(r"=")]
     Eq,
-    #[token(r"\\ge")]
+    #[token(r"\ge")]
     Ge,
-    #[token(r"\\le")]
+    #[token(r"\le")]
     Le,
-    #[token(r"\\gt")]
+    #[token(r"\gt")]
     Gt,
-    #[token(r"\\lt")]
+    #[token(r"\lt")]
     Lt,
 
     // OPERATORS -------------------------------------------
-    #[token(r"\\frac")]
+    #[token(r"\frac")]
     Frac,
-    #[token(r"\\div")]
+    #[token(r"\div")]
     #[token("/")]
     Div,
     #[regex(r"\++")]
     Plus,
     #[token("-")]
     Minus,
-    #[token(r"\\cdot")]
+    #[token(r"\cdot")]
     #[token("*")]
     Mul,
     #[token("^")]
@@ -72,55 +72,55 @@ pub enum Token {
     Range,
     #[token(".")]
     Dot,
-    #[token(r"\\sqrt")]
+    #[token(r"\sqrt")]
     Sqrt,
 
     // BUILTINS --------------------------------------------
-    #[token(r"\\operatorname{random}")]
+    #[token(r"\operatorname{random}")]
     Random,
-    #[token(r"\\min")]
+    #[token(r"\min")]
     Min,
-    #[token(r"\\max")]
+    #[token(r"\max")]
     Max,
-    #[token(r"\\operatorname{count}")]
+    #[token(r"\operatorname{count}")]
     Count,
-    #[token(r"\\operatorname{total}")]
+    #[token(r"\operatorname{total}")]
     Total,
-    #[token(r"\\operatorname{length}")]
+    #[token(r"\operatorname{length}")]
     Length,
-    #[token(r"\\operatorname{join}")]
+    #[token(r"\operatorname{join}")]
     Join,
-    #[token(r"\\operatorname{sort}")]
+    #[token(r"\operatorname{sort}")]
     Sort,
-    #[token(r"\\operatorname{shuffle}")]
+    #[token(r"\operatorname{shuffle}")]
     Shuffle,
-    #[token(r"\\operatorname{unique}")]
+    #[token(r"\operatorname{unique}")]
     Unique,
-    #[token(r"\\operatorname{for}")]
+    #[token(r"\operatorname{for}")]
     For,
-    #[token(r"\\sin")]
+    #[token(r"\sin")]
     Sin,
-    #[token(r"\\cos")]
+    #[token(r"\cos")]
     Cos,
-    #[token(r"\\tan")]
+    #[token(r"\tan")]
     Tan,
-    #[token(r"\\csc")]
+    #[token(r"\csc")]
     Csc,
-    #[token(r"\\sec")]
+    #[token(r"\sec")]
     Sec,
-    #[token(r"\\cot")]
+    #[token(r"\cot")]
     Cot,
-    #[token(r"\\sin^{-1}")]
+    #[token(r"\sin^{-1}")]
     InvSin,
-    #[token(r"\\cos^{-1}")]
+    #[token(r"\cos^{-1}")]
     InvCos,
-    #[token(r"\\tan^{-1}")]
+    #[token(r"\tan^{-1}")]
     InvTan,
-    #[token(r"\\csc^{-1}")]
+    #[token(r"\csc^{-1}")]
     InvCsc,
-    #[token(r"\\sec^{-1}")]
+    #[token(r"\sec^{-1}")]
     InvSec,
-    #[token(r"\\cot^{-1}")]
+    #[token(r"\cot^{-1}")]
     InvCot,
 }
 mod categories {

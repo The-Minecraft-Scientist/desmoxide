@@ -91,6 +91,7 @@ pub enum ASTNodeType<'a> {
     Mul(ASTNode<'a>, ASTNode<'a>),
     Div(ASTNode<'a>, ASTNode<'a>),
     Pow(ASTNode<'a>, ASTNode<'a>),
+    NthRoot(ASTNode<'a>, ASTNode<'a>),
     // Unary operators
     Neg(ASTNode<'a>),
     Sqrt(ASTNode<'a>),

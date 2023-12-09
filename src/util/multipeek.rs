@@ -26,12 +26,21 @@ impl<T: Iterator + Sized> MultiPeek<T> {
         self.buffer.push(value);
         self.buffer.last().unwrap()
     }
+    pub fn multipeek_res(&mut self) -> Result<&T::Item> {
+        self.multipeek().as_ref().context("unexpected EOF")
+    }
+    pub fn catch_up(&mut self) {
+        self.buffer.clear();
+    }
     pub fn peek_next(&mut self) -> &Option<T::Item> {
         if self.buffer.is_empty() {
             let value = self.iter.next();
             self.buffer.push(value);
         }
         self.buffer.last().unwrap()
+    }
+    pub fn peek_next_res(&mut self) -> Result<&T::Item> {
+        self.peek_next().as_ref().context("unexpected EOF")
     }
     pub fn push(&mut self, val: T::Item) {
         self.buffer.push(Some(val))

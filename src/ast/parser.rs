@@ -5,7 +5,12 @@ use thin_vec::{thin_vec, ThinVec};
 
 use anyhow::{bail, Context, Result};
 
-use super::{expression::ExpressionMeta, ASTNode, ASTNodeType, DotAccess::*, Ident, ListCompInfo};
+use super::{
+    expression::{EquationType, ExpressionMeta, ExpressionType},
+    ASTNode, ASTNodeType,
+    DotAccess::*,
+    Ident, ListCompInfo,
+};
 use crate::{
     assert_next_token_eq,
     ast::{List, Opcode, Value},
@@ -27,24 +32,90 @@ impl<'a> Parser<'a> {
     }
     pub fn line_lexer(&self, line: u32) -> Result<Lexer<'a, Token>> {
         Ok(Token::lexer(
-            self.storage
+            *self
+                .storage
                 .get(&line)
                 .context(format!("line with ID {} not found!", line))?,
         ))
+    }
+    fn scan_expression_type(
+        &self,
+        idx: u32,
+        lexer: &mut MultiPeek<LexIter<'a, Token>>,
+    ) -> Result<()> {
+        let first = *lexer.multipeek_res()?;
+        let t = match first.1 {
+            Token::Ident => match lexer.multipeek_res()?.1 {
+                //Function definition
+                Token::LParen => {
+                    let mut argv: ThinVec<Ident<'a>> = ThinVec::with_capacity(3);
+                    loop {
+                        match lexer.multipeek_res()? {
+                            (s, Token::Ident) => argv.push((*s).into()),
+                            (_, Token::Comma) => {}
+                            (_, Token::RParen) => {
+                                lexer.catch_up();
+                                assert_next_token_eq!(lexer, Token::Eq);
+                                break Some(ExpressionType::Fn {
+                                    name: first.0.into(),
+                                    params: argv,
+                                });
+                            }
+                            (_, _) => break None,
+                        };
+                    }
+                }
+                //[Ident]=[stuff]
+                Token::Eq => Some(ExpressionType::Var(first.0.into())),
+                _ => None,
+            },
+            _ => None,
+        };
+        let mut meta = ExpressionMeta::INVALID;
+        if let Some(typ) = t {
+            meta.expression_type = Some(typ);
+        } else {
+            //Default case, equation
+            let lhs = self.parse_from_lexer(lexer)?;
+            let next = lexer.next_res()?;
+            let s = match next.1 {
+                Token::Gt => EquationType::InEq(Opcode::Gt),
+                Token::Ge => EquationType::InEq(Opcode::Ge),
+                Token::Lt => EquationType::InEq(Opcode::Lt),
+                Token::Le => EquationType::InEq(Opcode::Le),
+                Token::Eq => EquationType::Implicit,
+                t => {
+                    bad_token!(next.0, t, "determining expression type")
+                }
+            };
+            meta.cached_lhs_ast = Some(lhs);
+            meta.expression_type = Some(ExpressionType::Eq {
+                eq_type: EquationType::Implicit,
+            });
+            //Might as well cache this work
+        }
+
+        self.meta.borrow_mut().insert(idx, meta);
+        Ok(())
     }
     //pub fn compile_line(&'a self, lex: &mut MultiPeek<LexIter<'a, Token>>) {}
     pub fn parse_all(&self) -> Result<()> {
         Ok(())
     }
-    pub fn expression_ast(&self, expr: u32) -> Result<ASTNode<'a>> {
-        let mut lexer = MultiPeek::new(LexIter::new(self.line_lexer(expr)?));
+    pub fn expression_ast(&self, id: u32) -> Result<ASTNode<'a>> {
+        self.parse_from_lexer(&mut MultiPeek::new(LexIter::new(self.line_lexer(id)?)))
+    }
+    pub fn parse_from_lexer(
+        &self,
+        lexer: &mut MultiPeek<LexIter<'a, Token>>,
+    ) -> Result<ASTNode<'a>> {
         let (_ident, Token::Ident) = lexer.next_res()? else {
             bail!("first token not an indentifier");
         };
         let (_st, Token::Eq) = lexer.next_res()? else {
             bail!("second token not \"=\"");
         };
-        self.recursive_parse_expr(&mut lexer, 0)
+        self.recursive_parse_expr(lexer, 0)
     }
     fn parse_list_body(&self, lexer: &mut MultiPeek<LexIter<'a, Token>>) -> Result<List<'a>> {
         let next_token = lexer.peek_next().context("unexpected EOF")?;
@@ -172,6 +243,7 @@ impl<'a> Parser<'a> {
                 ret
             }
             Token::Frac => {
+                dbg!("called");
                 //Handle latex frac command (\frac{numerator}{denominator})
                 assert_next_token_eq!(lexer, Token::LGroup);
                 let numerator = self.recursive_parse_expr(lexer, 0)?;
@@ -180,6 +252,27 @@ impl<'a> Parser<'a> {
                 let denominator = self.recursive_parse_expr(lexer, 0)?;
                 assert_next_token_eq!(lexer, Token::RGroup);
                 ASTNodeType::Div(numerator, denominator).into()
+            }
+            Token::Sqrt => {
+                match lexer.next_res()? {
+                    //handle nthroot
+                    (_, Token::LBracket) => {
+                        let n = self.recursive_parse_expr(lexer, 0)?;
+                        assert_next_token_eq!(lexer, Token::RBracket);
+                        assert_next_token_eq!(lexer, Token::LGroup);
+                        let base = self.recursive_parse_expr(lexer, 0)?;
+                        assert_next_token_eq!(lexer, Token::RGroup);
+                        ASTNodeType::NthRoot(n, base).into()
+                    }
+                    //handle pure sqrt
+                    (_, Token::LGroup) => {
+                        let base = self.recursive_parse_expr(lexer, 0)?;
+                        assert_next_token_eq!(lexer, Token::RGroup);
+                        ASTNodeType::NthRoot(ASTNodeType::Val(Value::ConstantI64(2)).into(), base)
+                            .into()
+                    }
+                    (s, t) => bad_token!(s, t, "in sqrt expression"),
+                }
             }
             Token::LBracket => ASTNodeType::List(Self::parse_list_body(self, lexer)?).into(),
             t if t.is_trig() => {
@@ -194,9 +287,11 @@ impl<'a> Parser<'a> {
             }
             t => bad_token!(next.0, t, "getting lhs"),
         };
+        dbg!(&lhs);
 
         //Loop across this level
         loop {
+            dbg!("in loop");
             let Some(a) = *lexer.peek_next() else { break };
             let op = match a.1 {
                 Token::Plus => Opcode::Add,

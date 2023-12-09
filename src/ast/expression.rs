@@ -1,16 +1,19 @@
+use thin_vec::ThinVec;
 
-
-use super::{ASTNode, Opcode};
-
+use super::{ASTNode, Ident, Opcode};
 
 #[derive(Debug, Clone)]
 pub struct ExpressionMeta<'a> {
-    cached_ast: Option<ASTNode<'a>>,
-    expression_type: Option<ExpressionType<'a>>,
+    pub cached_rhs_ast: Option<ASTNode<'a>>,
+    pub cached_lhs_ast: Option<ASTNode<'a>>,
+    pub expression_type: Option<ExpressionType<'a>>,
 }
 impl<'a> ExpressionMeta<'a> {
-    pub fn has_ast(&self) -> bool {
-        self.cached_ast.is_some()
+    pub fn has_rhs_ast(&self) -> bool {
+        self.cached_rhs_ast.is_some()
+    }
+    pub fn has_lhs_ast(&self) -> bool {
+        self.cached_lhs_ast.is_some()
     }
     pub fn has_type(&self) -> bool {
         self.expression_type.is_some()
@@ -19,7 +22,8 @@ impl<'a> ExpressionMeta<'a> {
         *self = Self::INVALID;
     }
     pub const INVALID: Self = Self {
-        cached_ast: None,
+        cached_lhs_ast: None,
+        cached_rhs_ast: None,
         expression_type: None,
     };
 }
@@ -27,13 +31,11 @@ impl<'a> ExpressionMeta<'a> {
 #[derive(Debug, Clone)]
 pub enum ExpressionType<'a> {
     Fn {
-        ident: &'a str,
-        params: Vec<&'a str>,
+        name: Ident<'a>,
+        params: ThinVec<Ident<'a>>,
     },
-    Var {
-        ident: &'a str,
-    },
-    Equation {
+    Var(Ident<'a>),
+    Eq {
         eq_type: EquationType,
     },
 }
