@@ -1,4 +1,4 @@
-//#![allow(unused)]
+#![allow(unused)]
 pub mod expression;
 pub mod parser;
 

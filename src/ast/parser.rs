@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap, fmt::format};
+use std::{cell::RefCell, collections::HashMap};
 
 use logos::{Lexer, Logos};
 use thin_vec::{thin_vec, ThinVec};
@@ -145,7 +145,7 @@ impl<'a> Parser<'a> {
         let first_scope = self.recursive_parse_expr(lexer, 0)?;
         let next_token = lexer.peek_next().context("unexpected EOF")?;
         //Range list ([0...3])
-        if let ASTNodeType::List(l) = &*first_scope {
+        if let ASTNodeType::List(_l) = &*first_scope {
             if next_token.1 == Token::RParen {
                 vars.push(first_scope);
                 return Ok(vars);
