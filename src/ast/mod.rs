@@ -96,6 +96,7 @@ pub enum ASTNodeType<'a> {
     Sqrt(ASTNode<'a>),
 
     Parens(Ident<'a>, ASTNode<'a>), // Ambiguous case, either multiplication by juxtaposition or a function call
+    FunctionCall(Ident<'a>, ThinVec<ASTNode<'a>>), // Function with its list of arguments
     Index(ASTNode<'a>, ASTNode<'a>), // List indexing operations
 
     List(List<'a>), //List

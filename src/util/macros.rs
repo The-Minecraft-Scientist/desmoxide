@@ -13,9 +13,11 @@ macro_rules! assert_next_token_eq {
         let __token = $l.next().context("unexpected EOF")?;
         if __token.1 != $e {
             anyhow::bail!(
-                "Next token {:?} did not match expected token {:?}",
+                "Next token {:?} did not match expected token {:?} at line {} of {}",
                 __token.1,
-                $e
+                $e,
+                line!(),
+                file!(),
             );
         }
     }};

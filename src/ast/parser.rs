@@ -15,29 +15,28 @@ use crate::{
 };
 
 pub struct Parser<'a> {
-    pub storage: &'a HashMap<usize, String>,
-    pub meta: RefCell<HashMap<usize, ExpressionMeta<'a>>>,
+    pub storage: &'a HashMap<u32, &'a str>,
+    pub meta: RefCell<HashMap<u32, ExpressionMeta<'a>>>,
 }
 impl<'a> Parser<'a> {
-    pub fn new(lines: &'a HashMap<usize, String>) -> Self {
+    pub fn new(lines: &'a HashMap<u32, &'a str>) -> Self {
         Self {
             meta: RefCell::new(HashMap::with_capacity(lines.len())),
             storage: lines,
         }
     }
-    pub fn line_lexer(&self, line: usize) -> Result<Lexer<'a, Token>> {
+    pub fn line_lexer(&self, line: u32) -> Result<Lexer<'a, Token>> {
         Ok(Token::lexer(
             self.storage
                 .get(&line)
-                .context(format!("line with ID {} not found!", line))?
-                .as_str(),
+                .context(format!("line with ID {} not found!", line))?,
         ))
     }
     //pub fn compile_line(&'a self, lex: &mut MultiPeek<LexIter<'a, Token>>) {}
     pub fn parse_all(&self) -> Result<()> {
         Ok(())
     }
-    pub fn expression_ast(&self, expr: usize) -> Result<ASTNode<'a>> {
+    pub fn expression_ast(&self, expr: u32) -> Result<ASTNode<'a>> {
         let mut lexer = MultiPeek::new(LexIter::new(self.line_lexer(expr)?));
         let (_ident, Token::Ident) = lexer.next_res()? else {
             bail!(" first token not an indentifier");
@@ -129,25 +128,27 @@ impl<'a> Parser<'a> {
             }
         })
     }
+
     fn parse_autojoin_args_suffix(
         &self,
         lexer: &mut MultiPeek<LexIter<'a, Token>>,
         mut vars: ThinVec<ASTNode<'a>>,
-    ) -> Result<List<'a>> {
+    ) -> Result<ThinVec<ASTNode<'a>>> {
         assert_next_token_eq!(lexer, Token::LParen);
         let next_token = lexer.peek_next().context("unexpected EOF")?;
         //Empty list
         if next_token.1 == Token::RParen {
             lexer.discard()?;
             //empty list
-            return Ok(List::List(ThinVec::new()));
+            return Ok(vars);
         }
         let first_scope = self.recursive_parse_expr(lexer, 0)?;
         let next_token = lexer.peek_next().context("unexpected EOF")?;
         //Range list ([0...3])
         if let ASTNodeType::List(l) = &*first_scope {
             if next_token.1 == Token::RParen {
-                return Ok(l.clone());
+                vars.push(first_scope);
+                return Ok(vars);
             }
         }
         Ok(match next_token.1 {
@@ -165,10 +166,13 @@ impl<'a> Parser<'a> {
                     }
                     vars.push(self.recursive_parse_expr(lexer, 0)?)
                 }
-                List::List(vars)
+                vars
             }
             //Single element list
-            Token::RParen => List::List(thin_vec![first_scope]),
+            Token::RParen => {
+                vars.push(first_scope);
+                vars
+            }
             t => {
                 bad_token!(next_token.0, t, "parsing list")
             }
@@ -267,7 +271,7 @@ impl<'a> Parser<'a> {
                         vars.push(lhs);
                         lhs = ASTNode::new_autojoin_fn(
                             id.1,
-                            self.parse_autojoin_args_suffix(lexer, vars)?,
+                            List::List(self.parse_autojoin_args_suffix(lexer, vars)?),
                         )?;
                         continue;
                     }
