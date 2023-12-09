@@ -8,14 +8,14 @@ macro_rules! bad_token {
     }};
 }
 #[macro_export]
-macro_rules! assert_next_token_eq {
-    ($l:expr, $e:expr) => {{
+macro_rules! assert_token_matches {
+    ($l:expr, $e:pat) => {{
         let __token = $l.next().context("unexpected EOF")?;
-        if __token.1 != $e {
+        if !matches!(__token.1, $e) {
             anyhow::bail!(
                 "Next token {:?} did not match expected token {:?} at line {} of {}",
                 __token.1,
-                $e,
+                stringify!($e),
                 line!(),
                 file!(),
             );

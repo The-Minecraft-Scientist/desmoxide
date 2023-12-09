@@ -25,6 +25,7 @@ mod ast_impl {
     impl<'a> ASTNode<'a> {
         pub fn new_simple_with_node(token: Token, inner: ASTNode<'a>) -> Result<Self> {
             Ok(match token {
+                //trig
                 Sin => AN::Sin(inner),
                 Cos => AN::Cos(inner),
                 Tan => AN::Tan(inner),
@@ -37,7 +38,17 @@ mod ast_impl {
                 InvCsc => AN::InvCsc(inner),
                 InvSec => AN::InvSec(inner),
                 InvCot => AN::InvCot(inner),
-                t => bail!("token {:?} is not a trig builtin", t),
+                Ceil => AN::Ceil(inner),
+                Floor => AN::Floor(inner),
+
+                t => bail!("token {:?} is not a simple builtin", t),
+            }
+            .into())
+        }
+        pub fn new_simple_2arg(token: Token, arg0: ASTNode<'a>, arg1: ASTNode<'a>) -> Result<Self> {
+            Ok(match token {
+                Token::Mod => AN::Mod(arg0, arg1),
+                t => bail!("token {:?} is not a simple 2-argument builtin", t),
             }
             .into())
         }
@@ -116,6 +127,7 @@ pub enum ASTNodeType<'a> {
     InvCsc(ASTNode<'a>),
     InvSec(ASTNode<'a>),
     InvCot(ASTNode<'a>),
+
     //List builtins
     Min(List<'a>),
     Max(List<'a>),
@@ -123,6 +135,7 @@ pub enum ASTNodeType<'a> {
     Total(List<'a>),
     Join(List<'a>),
     Length(ASTNode<'a>),
+
     // 2 argument sort is optional
     Sort(List<'a>, Option<ASTNode<'a>>),
     // Seed argument is optional
@@ -130,7 +143,13 @@ pub enum ASTNodeType<'a> {
     Unique(List<'a>),
     // Random can be called with 0, 1, or 2 arguments
     Random(Option<(ASTNode<'a>, Option<ASTNode<'a>>)>),
-    DotAccess(ASTNode<'a>, DotAccess),
+    CoordinateAccess(ASTNode<'a>, DotAccess),
+
+    // "number theory functions"
+    /// a % b
+    Mod(ASTNode<'a>, ASTNode<'a>),
+    Floor(ASTNode<'a>),
+    Ceil(ASTNode<'a>),
 }
 #[derive(Debug, Clone)]
 pub enum List<'a> {

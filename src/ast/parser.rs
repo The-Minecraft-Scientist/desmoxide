@@ -1,4 +1,7 @@
-use std::{cell::RefCell, collections::HashMap};
+use std::{
+    cell::RefCell,
+    collections::{hash_map::Entry, HashMap},
+};
 
 use logos::{Lexer, Logos};
 use thin_vec::{thin_vec, ThinVec};
@@ -12,7 +15,7 @@ use super::{
     Ident, ListCompInfo,
 };
 use crate::{
-    assert_next_token_eq,
+    assert_token_matches,
     ast::{List, Opcode, Value},
     bad_token,
     lexer::Token,
@@ -55,7 +58,7 @@ impl<'a> Parser<'a> {
                             (_, Token::Comma) => {}
                             (_, Token::RParen) => {
                                 lexer.catch_up();
-                                assert_next_token_eq!(lexer, Token::Eq);
+                                assert_token_matches!(lexer, Token::Eq);
                                 break Some(ExpressionType::Fn {
                                     name: first.0.into(),
                                     params: argv,
@@ -66,7 +69,10 @@ impl<'a> Parser<'a> {
                     }
                 }
                 //[Ident]=[stuff]
-                Token::Eq => Some(ExpressionType::Var(first.0.into())),
+                Token::Eq => {
+                    lexer.catch_up();
+                    Some(ExpressionType::Var(first.0.into()))
+                }
                 _ => None,
             },
             _ => None,
@@ -76,7 +82,7 @@ impl<'a> Parser<'a> {
             meta.expression_type = Some(typ);
         } else {
             //Default case, equation
-            let lhs = self.parse_from_lexer(lexer)?;
+            let lhs = self.recursive_parse_expr(lexer, 0)?;
             let next = lexer.next_res()?;
             let s = match next.1 {
                 Token::Gt => EquationType::InEq(Opcode::Gt),
@@ -92,30 +98,47 @@ impl<'a> Parser<'a> {
             meta.expression_type = Some(ExpressionType::Eq {
                 eq_type: EquationType::Implicit,
             });
-            //Might as well cache this work
         }
-
         self.meta.borrow_mut().insert(idx, meta);
         Ok(())
     }
-    //pub fn compile_line(&'a self, lex: &mut MultiPeek<LexIter<'a, Token>>) {}
-    pub fn parse_all(&self) -> Result<()> {
+    pub fn update_all(&self) -> Result<()> {
+        let start = std::time::Instant::now();
+        let mut ctr = 0;
+        let mut problems = Vec::with_capacity(50);
+        for k in self.storage.keys() {
+            let p = self
+                .parse_expr(*k)
+                .context(format!("failed parsing line {}", k));
+            if !p.is_err() {
+                ctr += 1;
+            } else {
+                problems.push((*k, p.unwrap_err()));
+            }
+        }
+        let end = std::time::Instant::now();
+        println!(
+            "successfully parsed {} out of {} expressions in {} microseconds",
+            ctr,
+            self.storage.len(),
+            end.checked_duration_since(start).unwrap().as_micros()
+        );
+        println!("problematic expressions: \n {:?}", problems);
         Ok(())
     }
-    pub fn expression_ast(&self, id: u32) -> Result<ASTNode<'a>> {
-        self.parse_from_lexer(&mut MultiPeek::new(LexIter::new(self.line_lexer(id)?)))
-    }
-    pub fn parse_from_lexer(
-        &self,
-        lexer: &mut MultiPeek<LexIter<'a, Token>>,
-    ) -> Result<ASTNode<'a>> {
-        let (_ident, Token::Ident) = lexer.next_res()? else {
-            bail!("first token not an indentifier");
-        };
-        let (_st, Token::Eq) = lexer.next_res()? else {
-            bail!("second token not \"=\"");
-        };
-        self.recursive_parse_expr(lexer, 0)
+    pub fn parse_expr(&self, idx: u32) -> Result<ASTNode<'a>> {
+        let mut lex = MultiPeek::new(LexIter::new(self.line_lexer(idx)?));
+        self.scan_expression_type(idx, &mut lex)?;
+        let lhs = self.recursive_parse_expr(&mut lex, 0)?;
+        match self.meta.borrow_mut().entry(idx) {
+            Entry::Occupied(mut v) => v.get_mut().cached_lhs_ast = Some(lhs.clone()),
+            Entry::Vacant(a) => {
+                let mut v = ExpressionMeta::INVALID;
+                v.cached_lhs_ast = Some(lhs.clone());
+                a.insert(v);
+            }
+        }
+        Ok(lhs)
     }
     fn parse_list_body(&self, lexer: &mut MultiPeek<LexIter<'a, Token>>) -> Result<List<'a>> {
         let next_token = lexer.peek_next().context("unexpected EOF")?;
@@ -129,7 +152,7 @@ impl<'a> Parser<'a> {
         let next_token = lexer.peek_next().context("unexpected EOF")?;
         //Range list ([0...3])
         if let ASTNodeType::List(l) = &*first_scope {
-            assert_next_token_eq!(lexer, Token::RBracket);
+            assert_token_matches!(lexer, Token::RBracket);
             return Ok(l.clone());
         }
         Ok(match next_token.1 {
@@ -159,7 +182,7 @@ impl<'a> Parser<'a> {
     }
     ///Special case handling for min, max, count, total and join
     fn parse_autojoin_args(&self, lexer: &mut MultiPeek<LexIter<'a, Token>>) -> Result<List<'a>> {
-        assert_next_token_eq!(lexer, Token::LParen);
+        assert_token_matches!(lexer, Token::LParen);
         self.parse_fn_args(lexer, ThinVec::with_capacity(20))
             .map(|s| List::List(s))
     }
@@ -219,7 +242,6 @@ impl<'a> Parser<'a> {
     ) -> Result<ASTNode<'a>> {
         //get LHS token
         let next = lexer.next_res()?;
-        //Handle implicit multiplication (xyz = x * y * z)
         let mut lhs = match next.1 {
             //Identifier
             Token::Ident => ASTNodeType::Val(next.0.into()).into(),
@@ -235,22 +257,21 @@ impl<'a> Parser<'a> {
             Token::LGroup => {
                 let ret = self.recursive_parse_expr(lexer, 0)?;
                 {}
-                ret
+                bail!("piecewises are unimplemented")
             }
             Token::LParen => {
                 let ret = self.recursive_parse_expr(lexer, 0)?;
-                assert_next_token_eq!(lexer, Token::RParen);
+                assert_token_matches!(lexer, Token::RParen);
                 ret
             }
             Token::Frac => {
-                dbg!("called");
                 //Handle latex frac command (\frac{numerator}{denominator})
-                assert_next_token_eq!(lexer, Token::LGroup);
+                assert_token_matches!(lexer, Token::LGroup);
                 let numerator = self.recursive_parse_expr(lexer, 0)?;
-                assert_next_token_eq!(lexer, Token::RGroup);
-                assert_next_token_eq!(lexer, Token::LGroup);
+                assert_token_matches!(lexer, Token::RGroup);
+                assert_token_matches!(lexer, Token::LGroup);
                 let denominator = self.recursive_parse_expr(lexer, 0)?;
-                assert_next_token_eq!(lexer, Token::RGroup);
+                assert_token_matches!(lexer, Token::RGroup);
                 ASTNodeType::Div(numerator, denominator).into()
             }
             Token::Sqrt => {
@@ -258,16 +279,16 @@ impl<'a> Parser<'a> {
                     //handle nthroot
                     (_, Token::LBracket) => {
                         let n = self.recursive_parse_expr(lexer, 0)?;
-                        assert_next_token_eq!(lexer, Token::RBracket);
-                        assert_next_token_eq!(lexer, Token::LGroup);
+                        assert_token_matches!(lexer, Token::RBracket);
+                        assert_token_matches!(lexer, Token::LGroup);
                         let base = self.recursive_parse_expr(lexer, 0)?;
-                        assert_next_token_eq!(lexer, Token::RGroup);
+                        assert_token_matches!(lexer, Token::RGroup);
                         ASTNodeType::NthRoot(n, base).into()
                     }
                     //handle pure sqrt
                     (_, Token::LGroup) => {
                         let base = self.recursive_parse_expr(lexer, 0)?;
-                        assert_next_token_eq!(lexer, Token::RGroup);
+                        assert_token_matches!(lexer, Token::RGroup);
                         ASTNodeType::NthRoot(ASTNodeType::Val(Value::ConstantI64(2)).into(), base)
                             .into()
                     }
@@ -275,11 +296,38 @@ impl<'a> Parser<'a> {
                 }
             }
             Token::LBracket => ASTNodeType::List(Self::parse_list_body(self, lexer)?).into(),
-            t if t.is_trig() => {
-                assert_next_token_eq!(lexer, Token::LParen);
+            Token::Random => {
+                assert_token_matches!(lexer, Token::LParen);
+                if lexer.peek_next_res()?.1 == Token::RParen {
+                    ASTNodeType::Random(None).into()
+                } else {
+                    let arg0 = self.recursive_parse_expr(lexer, 0)?;
+                    let mut arg1 = None;
+                    match lexer.peek_next_res()? {
+                        (_, Token::Comma) => {
+                            lexer.catch_up();
+                            arg1 = Some(self.recursive_parse_expr(lexer, 0)?);
+                        }
+                        (_, Token::RParen) => {}
+                        t => bad_token!(t.0, t.1, "parsing random() function args"),
+                    };
+                    assert_token_matches!(lexer, Token::RParen | Token::Comma);
+                    ASTNodeType::Random(Some((arg0, arg1))).into()
+                }
+            }
+            t if t.is_simple() => {
+                assert_token_matches!(lexer, Token::LParen);
                 let inner = self.recursive_parse_expr(lexer, 0)?;
-                assert_next_token_eq!(lexer, Token::RParen);
+                assert_token_matches!(lexer, Token::RParen);
                 ASTNode::new_simple_with_node(t, inner)?
+            }
+            t if t.is_simple_2arg() => {
+                assert_token_matches!(lexer, Token::LParen);
+                let arg0 = self.recursive_parse_expr(lexer, 0)?;
+                assert_token_matches!(lexer, Token::Comma);
+                let arg1 = self.recursive_parse_expr(lexer, 0)?;
+                assert_token_matches!(lexer, Token::RParen);
+                ASTNode::new_simple_2arg(t, arg0, arg1)?
             }
             t if t.should_autojoin_args() => {
                 let arg = Self::parse_autojoin_args(self, lexer)?;
@@ -287,11 +335,8 @@ impl<'a> Parser<'a> {
             }
             t => bad_token!(next.0, t, "getting lhs"),
         };
-        dbg!(&lhs);
-
         //Loop across this level
         loop {
-            dbg!("in loop");
             let Some(a) = *lexer.peek_next() else { break };
             let op = match a.1 {
                 Token::Plus => Opcode::Add,
@@ -316,7 +361,7 @@ impl<'a> Parser<'a> {
                                 bail!("unexpected ident \"{}\" in dot accessor!", s)
                             }
                         };
-                        lhs = ASTNodeType::DotAccess(lhs, a).into();
+                        lhs = ASTNodeType::CoordinateAccess(lhs, a).into();
                         continue;
                     }
                     if !id.1.suffix_call_allowed() {
@@ -355,7 +400,7 @@ impl<'a> Parser<'a> {
                             break;
                         };
                         lexer.discard()?;
-                        assert_next_token_eq!(lexer, Token::Eq);
+                        assert_token_matches!(lexer, Token::Eq);
                         vars.push((id.into(), self.recursive_parse_expr(lexer, 0)?));
                         if lexer.peek_next().context("unexpected EOF")?.1 != Token::Comma {
                             break;
@@ -366,14 +411,13 @@ impl<'a> Parser<'a> {
                     lhs = ASTNodeType::List(List::ListComp(lhs, ListCompInfo { vars })).into();
                     continue;
                 }
-                //TODO: fix this jankery
-                t if t.is_value() => {
+                t if t.ends_parse() => {
+                    break;
+                }
+                t => {
                     //This is super jank but we unconditionally pop the lexer every iteration so...
                     lexer.push(("*", Token::Mul));
                     Opcode::Mul
-                }
-                t if t.ends_parse() => {
-                    break;
                 }
                 t => bad_token!(a.0, t, "getting opcode"),
             };
@@ -401,17 +445,14 @@ impl<'a> Parser<'a> {
                             }
                         }
                     }
-                    (
-                        Opcode::Parens,
-                        ASTNodeType::Val(Value::ConstantF64(_) | Value::ConstantI64(_)),
-                    ) => {
+                    (Opcode::Parens, a) => {
                         let rhs = self.recursive_parse_expr(lexer, 0)?;
-                        assert_next_token_eq!(lexer, Token::RParen);
+                        assert_token_matches!(lexer, Token::RParen);
                         lhs = ASTNodeType::Mul(lhs, rhs).into();
                     }
                     (Opcode::Index, node) if node.can_be_list() => {
                         let rhs = self.recursive_parse_expr(lexer, 0)?;
-                        assert_next_token_eq!(lexer, Token::RBracket);
+                        assert_token_matches!(lexer, Token::RBracket);
                         lhs = ASTNodeType::Index(lhs, rhs).into();
                     }
 

@@ -30,9 +30,11 @@ pub enum Token {
     LParen,
     #[token(")")]
     RParen,
+    #[token(r"\{")]
     #[token("{")]
     LGroup,
     #[token("}")]
+    #[token(r"\}")]
     RGroup,
     #[token(",")]
     Comma,
@@ -122,6 +124,12 @@ pub enum Token {
     InvSec,
     #[token(r"\cot^{-1}")]
     InvCot,
+    #[token(r"\operatorname{mod}")]
+    Mod,
+    #[token(r"\operatorname{floor}")]
+    Floor,
+    #[token(r"\operatorname{ceil}")]
+    Ceil,
 }
 mod categories {
     use super::Token;
@@ -136,7 +144,7 @@ mod categories {
                 RGroup | For | RParen | Eq | Gt | Ge | Le | Lt | Colon | RBracket | Comma
             )
         }
-        pub fn is_trig(&self) -> bool {
+        pub fn is_simple(&self) -> bool {
             matches!(
                 self,
                 Sin | Cos
@@ -150,7 +158,12 @@ mod categories {
                     | InvCsc
                     | InvSec
                     | InvCot
+                    | Floor
+                    | Ceil
             )
+        }
+        pub fn is_simple_2arg(&self) -> bool {
+            matches!(self, Mod)
         }
         pub fn suffix_call_allowed(&self) -> bool {
             //TODO: this should be exhaustive
