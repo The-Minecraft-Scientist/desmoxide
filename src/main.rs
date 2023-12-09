@@ -22,6 +22,6 @@ fn main() -> Result<()> {
         }
     }
     let p = Parser::new(&m);
-    let _ = dbg!(p.expression_ast(452));
+    let _ = dbg!(p.expression_ast(4));
     Ok(())
 }

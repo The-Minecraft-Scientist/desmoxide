@@ -39,7 +39,7 @@ impl<'a> Parser<'a> {
     pub fn expression_ast(&self, expr: u32) -> Result<ASTNode<'a>> {
         let mut lexer = MultiPeek::new(LexIter::new(self.line_lexer(expr)?));
         let (_ident, Token::Ident) = lexer.next_res()? else {
-            bail!(" first token not an indentifier");
+            bail!("first token not an indentifier");
         };
         let (_st, Token::Eq) = lexer.next_res()? else {
             bail!("second token not \"=\"");
@@ -88,53 +88,16 @@ impl<'a> Parser<'a> {
     }
     ///Special case handling for min, max, count, total and join
     fn parse_autojoin_args(&self, lexer: &mut MultiPeek<LexIter<'a, Token>>) -> Result<List<'a>> {
-        let next_token = lexer.peek_next().context("unexpected EOF")?;
-        //Empty list
-        if next_token.1 == Token::RParen {
-            lexer.discard()?;
-            //empty list
-            return Ok(List::List(ThinVec::new()));
-        }
-        let first_scope = self.recursive_parse_expr(lexer, 0)?;
-        let next_token = lexer.peek_next().context("unexpected EOF")?;
-        let mut vars = ThinVec::with_capacity(10);
-        //Range list ([0...3])
-        if let ASTNodeType::List(l) = &*first_scope {
-            if next_token.1 == Token::RParen {
-                return Ok(l.clone());
-            }
-        }
-        Ok(match next_token.1 {
-            Token::Comma => {
-                vars.push(first_scope);
-                loop {
-                    match lexer.next_res()? {
-                        //We reached the last item
-                        (_, Token::RParen) => break,
-                        // Normal, continue to the next item
-                        (_, Token::Comma) => {}
-                        (s, t) => {
-                            bad_token!(s, t, "parsing list")
-                        }
-                    }
-                    vars.push(self.recursive_parse_expr(lexer, 0)?)
-                }
-                List::List(vars)
-            }
-            //Single element list
-            Token::RParen => List::List(thin_vec![first_scope]),
-            t => {
-                bad_token!(next_token.0, t, "parsing list")
-            }
-        })
+        assert_next_token_eq!(lexer, Token::LParen);
+        self.parse_fn_args(lexer, ThinVec::with_capacity(20))
+            .map(|s| List::List(s))
     }
 
-    fn parse_autojoin_args_suffix(
+    fn parse_fn_args(
         &self,
         lexer: &mut MultiPeek<LexIter<'a, Token>>,
         mut vars: ThinVec<ASTNode<'a>>,
     ) -> Result<ThinVec<ASTNode<'a>>> {
-        assert_next_token_eq!(lexer, Token::LParen);
         let next_token = lexer.peek_next().context("unexpected EOF")?;
         //Empty list
         if next_token.1 == Token::RParen {
@@ -200,7 +163,6 @@ impl<'a> Parser<'a> {
             // TODO: piecewise functions
             Token::LGroup => {
                 let ret = self.recursive_parse_expr(lexer, 0)?;
-                let _next = lexer.peek_next().context("unexpected EOF")?;
                 {}
                 ret
             }
@@ -271,7 +233,7 @@ impl<'a> Parser<'a> {
                         vars.push(lhs);
                         lhs = ASTNode::new_autojoin_fn(
                             id.1,
-                            List::List(self.parse_autojoin_args_suffix(lexer, vars)?),
+                            List::List(self.parse_fn_args(lexer, vars)?),
                         )?;
                         continue;
                     }
@@ -328,8 +290,21 @@ impl<'a> Parser<'a> {
                 match (op, &*lhs) {
                     (Opcode::Parens, ASTNodeType::Val(Value::Ident(ref s))) => {
                         let rhs = self.recursive_parse_expr(lexer, 0)?;
-                        assert_next_token_eq!(lexer, Token::RParen);
-                        lhs = ASTNodeType::Parens(s.clone(), rhs).into();
+                        let tok = lexer.next_res()?;
+                        match tok.1 {
+                            Token::RParen => {
+                                lhs = ASTNodeType::Parens(s.clone(), rhs).into();
+                            }
+                            Token::Comma => {
+                                let mut v = ThinVec::with_capacity(10);
+                                v.push(rhs);
+                                let v = self.parse_fn_args(lexer, v)?;
+                                lhs = ASTNodeType::FunctionCall(s.clone(), v).into();
+                            }
+                            t => {
+                                bad_token!(tok.0, t, "while parsing function call arguments")
+                            }
+                        }
                     }
                     (
                         Opcode::Parens,

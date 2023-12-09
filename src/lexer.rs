@@ -1,6 +1,7 @@
+pub use categories::*;
 /// Lexer token
 #[derive(logos::Logos, Debug, PartialEq, Clone, Copy)]
-#[logos(skip r"[ \t\n\f]+|\\left|\\right")]
+#[logos(skip r"[ \t\n\f]+|\\+left|\\+right")]
 pub enum Token {
     // LITERALS --------------------------------------------
     /// Floating point literal
@@ -12,7 +13,7 @@ pub enum Token {
 
     // IDENTIFIERS -----------------------------------------
     //Unrecognized LaTeX command; Treated as an identifer.
-    #[regex(r"\\[a-zA-Z]+(_\{[a-zA-Z]+\})?")]
+    #[regex(r"\\[a-zA-Z]+(_\{[a-zA-Z]+\})?", priority = 0)]
     //Single letter
     #[regex("[a-zA-Z]")]
     //name with subscript:
@@ -41,28 +42,28 @@ pub enum Token {
     Subscript,
 
     // COMPARISON OPERATORS --------------------------------
-    #[token("=")]
+    #[token(r"=")]
     Eq,
-    #[token("\\ge")]
+    #[token(r"\\ge")]
     Ge,
-    #[token("\\le")]
+    #[token(r"\\le")]
     Le,
-    #[token("\\gt")]
+    #[token(r"\\gt")]
     Gt,
-    #[token("\\lt")]
+    #[token(r"\\lt")]
     Lt,
 
     // OPERATORS -------------------------------------------
-    #[token("\\frac")]
+    #[token(r"\\frac")]
     Frac,
-    #[token("\\div")]
+    #[token(r"\\div")]
     #[token("/")]
     Div,
     #[regex(r"\++")]
     Plus,
     #[token("-")]
     Minus,
-    #[token("\\cdot")]
+    #[token(r"\\cdot")]
     #[token("*")]
     Mul,
     #[token("^")]
@@ -71,58 +72,57 @@ pub enum Token {
     Range,
     #[token(".")]
     Dot,
-    #[token("\\sqrt")]
+    #[token(r"\\sqrt")]
     Sqrt,
 
     // BUILTINS --------------------------------------------
-    #[token("\\operatorname{random}")]
+    #[token(r"\\operatorname{random}")]
     Random,
-    #[token("\\min")]
+    #[token(r"\\min")]
     Min,
-    #[token("\\max")]
+    #[token(r"\\max")]
     Max,
-    #[token("\\operatorname{count}")]
+    #[token(r"\\operatorname{count}")]
     Count,
-    #[token("\\operatorname{total}")]
+    #[token(r"\\operatorname{total}")]
     Total,
-    #[token("\\operatorname{length}")]
+    #[token(r"\\operatorname{length}")]
     Length,
-    #[token("\\operatorname{join}")]
+    #[token(r"\\operatorname{join}")]
     Join,
-    #[token("\\operatorname{sort}")]
+    #[token(r"\\operatorname{sort}")]
     Sort,
-    #[token("\\operatorname{shuffle}")]
+    #[token(r"\\operatorname{shuffle}")]
     Shuffle,
-    #[token("\\operatorname{unique}")]
+    #[token(r"\\operatorname{unique}")]
     Unique,
-    #[token("\\operatorname{for}")]
+    #[token(r"\\operatorname{for}")]
     For,
-    #[token("\\sin")]
+    #[token(r"\\sin")]
     Sin,
-    #[token("\\cos")]
+    #[token(r"\\cos")]
     Cos,
-    #[token("\\tan")]
+    #[token(r"\\tan")]
     Tan,
-    #[token("\\csc")]
+    #[token(r"\\csc")]
     Csc,
-    #[token("\\sec")]
+    #[token(r"\\sec")]
     Sec,
-    #[token("\\cot")]
+    #[token(r"\\cot")]
     Cot,
-    #[token("\\sin^{-1}")]
+    #[token(r"\\sin^{-1}")]
     InvSin,
-    #[token("\\cos^{-1}")]
+    #[token(r"\\cos^{-1}")]
     InvCos,
-    #[token("\\tan^{-1}")]
+    #[token(r"\\tan^{-1}")]
     InvTan,
-    #[token("\\csc^{-1}")]
+    #[token(r"\\csc^{-1}")]
     InvCsc,
-    #[token("\\sec^{-1}")]
+    #[token(r"\\sec^{-1}")]
     InvSec,
-    #[token("\\cot^{-1}")]
+    #[token(r"\\cot^{-1}")]
     InvCot,
 }
-pub use categories::*;
 mod categories {
     use super::Token;
     use super::Token::*;
