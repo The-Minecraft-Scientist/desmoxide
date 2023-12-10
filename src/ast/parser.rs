@@ -57,8 +57,10 @@ impl<'a> Parser<'a> {
                             (s, Token::Ident) => argv.push((*s).into()),
                             (_, Token::Comma) => {}
                             (_, Token::RParen) => {
+                                if lexer.multipeek().is_none() {
+                                    break None;
+                                }
                                 lexer.catch_up();
-                                assert_token_matches!(lexer, Token::Eq);
                                 break Some(ExpressionType::Fn {
                                     name: first.0.into(),
                                     params: argv,
@@ -83,21 +85,26 @@ impl<'a> Parser<'a> {
         } else {
             //Default case, equation
             let lhs = self.recursive_parse_expr(lexer, 0)?;
-            let next = lexer.next_res()?;
-            let s = match next.1 {
-                Token::Gt => EquationType::InEq(Opcode::Gt),
-                Token::Ge => EquationType::InEq(Opcode::Ge),
-                Token::Lt => EquationType::InEq(Opcode::Lt),
-                Token::Le => EquationType::InEq(Opcode::Le),
-                Token::Eq => EquationType::Implicit,
-                t => {
-                    bad_token!(next.0, t, "determining expression type")
-                }
+            let next = lexer.next_res();
+            if let Ok(n) = next {
+                let s = match n.1 {
+                    Token::Gt => EquationType::InEq(Opcode::Gt),
+                    Token::Ge => EquationType::InEq(Opcode::Ge),
+                    Token::Lt => EquationType::InEq(Opcode::Lt),
+                    Token::Le => EquationType::InEq(Opcode::Le),
+                    Token::Eq => EquationType::Implicit,
+                    t => {
+                        bad_token!(n.0, t, "determining expression type")
+                    }
+                };
+                meta.cached_lhs_ast = Some(lhs);
+                meta.expression_type = Some(ExpressionType::Eq { eq_type: s });
+            } else {
+                meta.cached_lhs_ast = Some(lhs);
+                meta.expression_type = Some(ExpressionType::Eq {
+                    eq_type: EquationType::Explicit,
+                });
             };
-            meta.cached_lhs_ast = Some(lhs);
-            meta.expression_type = Some(ExpressionType::Eq {
-                eq_type: EquationType::Implicit,
-            });
         }
         self.meta.borrow_mut().insert(idx, meta);
         Ok(())
@@ -126,19 +133,25 @@ impl<'a> Parser<'a> {
         println!("problematic expressions: \n {:?}", problems);
         Ok(())
     }
-    pub fn parse_expr(&self, idx: u32) -> Result<ASTNode<'a>> {
+    pub fn parse_expr(&self, idx: u32) -> Result<()> {
         let mut lex = MultiPeek::new(LexIter::new(self.line_lexer(idx)?));
         self.scan_expression_type(idx, &mut lex)?;
-        let lhs = self.recursive_parse_expr(&mut lex, 0)?;
-        match self.meta.borrow_mut().entry(idx) {
-            Entry::Occupied(mut v) => v.get_mut().cached_lhs_ast = Some(lhs.clone()),
-            Entry::Vacant(a) => {
-                let mut v = ExpressionMeta::INVALID;
-                v.cached_lhs_ast = Some(lhs.clone());
-                a.insert(v);
+        let mut lhs = None;
+        if let Some(_) = lex.peek_next() {
+            lhs = Some(self.recursive_parse_expr(&mut lex, 0)?);
+        }
+        {
+            match self.meta.borrow_mut().entry(idx) {
+                Entry::Occupied(mut v) => v.get_mut().cached_lhs_ast = lhs,
+                Entry::Vacant(a) => {
+                    let mut v = ExpressionMeta::INVALID;
+                    v.cached_lhs_ast = lhs;
+                    a.insert(v);
+                }
             }
         }
-        Ok(lhs)
+
+        Ok(())
     }
     fn parse_list_body(&self, lexer: &mut MultiPeek<LexIter<'a, Token>>) -> Result<List<'a>> {
         let next_token = lexer.peek_next().context("unexpected EOF")?;
@@ -192,9 +205,17 @@ impl<'a> Parser<'a> {
         lexer: &mut MultiPeek<LexIter<'a, Token>>,
         mut vars: ThinVec<ASTNode<'a>>,
     ) -> Result<ThinVec<ASTNode<'a>>> {
+        self.parse_args(lexer, vars, Token::RParen)
+    }
+    fn parse_args(
+        &self,
+        lexer: &mut MultiPeek<LexIter<'a, Token>>,
+        mut vars: ThinVec<ASTNode<'a>>,
+        tok: Token,
+    ) -> Result<ThinVec<ASTNode<'a>>> {
         let next_token = lexer.peek_next().context("unexpected EOF")?;
         //Empty list
-        if next_token.1 == Token::RParen {
+        if next_token.1 == tok {
             lexer.discard()?;
             //empty list
             return Ok(vars);
@@ -203,7 +224,7 @@ impl<'a> Parser<'a> {
         let next_token = lexer.peek_next().context("unexpected EOF")?;
         //Range list ([0...3])
         if let ASTNodeType::List(_l) = &*first_scope {
-            if next_token.1 == Token::RParen {
+            if next_token.1 == tok {
                 vars.push(first_scope);
                 return Ok(vars);
             }
@@ -226,12 +247,12 @@ impl<'a> Parser<'a> {
                 vars
             }
             //Single element list
-            Token::RParen => {
+            t if t == tok => {
                 vars.push(first_scope);
                 vars
             }
             t => {
-                bad_token!(next_token.0, t, "parsing list")
+                bad_token!(next_token.0, t, "parsing function arguments")
             }
         })
     }
@@ -368,7 +389,7 @@ impl<'a> Parser<'a> {
                         bail!("cannot call builtin {:?} as a suffix", id.1)
                     }
                     // Handle list function calls in suffix position (e.g. [1,2,3].sort()   )
-                    if id.1.should_autojoin_args() && lhs.can_be_list() {
+                    if id.1.should_autojoin_args() {
                         let mut vars = ThinVec::with_capacity(10);
                         vars.push(lhs);
                         lhs = ASTNode::new_autojoin_fn(
@@ -450,12 +471,34 @@ impl<'a> Parser<'a> {
                         assert_token_matches!(lexer, Token::RParen);
                         lhs = ASTNodeType::Mul(lhs, rhs).into();
                     }
-                    (Opcode::Index, node) if node.can_be_list() => {
+                    (Opcode::Index, node) => {
                         let rhs = self.recursive_parse_expr(lexer, 0)?;
-                        assert_token_matches!(lexer, Token::RBracket);
-                        lhs = ASTNodeType::Index(lhs, rhs).into();
+                        match lexer.next_res()?.1 {
+                            Token::RBracket => lhs = ASTNodeType::Index(lhs, rhs).into(),
+                            Token::Comma => {
+                                let mut v = ThinVec::with_capacity(10);
+                                v.push(rhs);
+                                lhs = ASTNodeType::Index(
+                                    lhs,
+                                    ASTNodeType::List(List::List(self.parse_args(
+                                        lexer,
+                                        v,
+                                        Token::RBracket,
+                                    )?))
+                                    .into(),
+                                )
+                                .into();
+                                assert_token_matches!(lexer, Token::RBracket);
+                            }
+                            t if t.is_comparison() => {
+                                let compcase = self.recursive_parse_expr(lexer, 0)?;
+                                let comp = t.as_comparison()?;
+                                lhs = ASTNodeType::ListFilt(lhs, comp, compcase).into();
+                                assert_token_matches!(lexer, Token::RBracket);
+                            }
+                            t => bad_token!("", t, "parsing list index args"),
+                        }
                     }
-
                     t => bail!("bad opcode: {:?}", t),
                 }
                 continue;

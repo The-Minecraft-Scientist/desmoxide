@@ -132,6 +132,10 @@ pub enum Token {
     Ceil,
 }
 mod categories {
+    use anyhow::{bail, Result};
+
+    use crate::ast::Comparison;
+
     use super::Token;
     use super::Token::*;
     impl Token {
@@ -182,6 +186,16 @@ mod categories {
         }
         pub fn is_comparison(&self) -> bool {
             matches!(self, Ge | Gt | Le | Lt | Eq)
+        }
+        pub fn as_comparison(&self) -> Result<Comparison> {
+            Ok(match self {
+                Ge => Comparison::Ge,
+                Gt => Comparison::Gt,
+                Le => Comparison::Le,
+                Lt => Comparison::Lt,
+                Eq => Comparison::Eq,
+                t => bail!("token {:?} is not a comparison", t),
+            })
         }
     }
 }

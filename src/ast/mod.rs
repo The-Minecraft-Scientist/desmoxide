@@ -52,7 +52,8 @@ mod ast_impl {
             }
             .into())
         }
-        pub fn new_autojoin_fn(token: Token, arg: List<'a>) -> Result<Self> {
+        pub fn new_autojoin_fn(token: Token, argl: List<'a>) -> Result<Self> {
+            let arg = AN::List(argl).into();
             Ok(match token {
                 Min => AN::Min(arg),
                 Max => AN::Max(arg),
@@ -112,6 +113,8 @@ pub enum ASTNodeType<'a> {
     Index(ASTNode<'a>, ASTNode<'a>), // List indexing operations
 
     List(List<'a>), //List
+    ListFilt(ASTNode<'a>, Comparison, ASTNode<'a>),
+
     Point(ASTNode<'a>, ASTNode<'a>),
 
     //Trigonometric functions
@@ -129,21 +132,23 @@ pub enum ASTNodeType<'a> {
     InvCot(ASTNode<'a>),
 
     //List builtins
-    Min(List<'a>),
-    Max(List<'a>),
-    Count(List<'a>),
-    Total(List<'a>),
-    Join(List<'a>),
+    Min(ASTNode<'a>),
+    Max(ASTNode<'a>),
+    Count(ASTNode<'a>),
+    Total(ASTNode<'a>),
+    Join(ASTNode<'a>),
     Length(ASTNode<'a>),
 
     // 2 argument sort is optional
-    Sort(List<'a>, Option<ASTNode<'a>>),
+    Sort(ASTNode<'a>, Option<ASTNode<'a>>),
     // Seed argument is optional
-    Shuffle(List<'a>, Option<ASTNode<'a>>),
-    Unique(List<'a>),
+    Shuffle(ASTNode<'a>, Option<ASTNode<'a>>),
+    Unique(ASTNode<'a>),
     // Random can be called with 0, 1, or 2 arguments
     Random(Option<(ASTNode<'a>, Option<ASTNode<'a>>)>),
     CoordinateAccess(ASTNode<'a>, DotAccess),
+    //comparison operator
+    Comp(ASTNode<'a>, Comparison, ASTNode<'a>),
 
     // "number theory functions"
     /// a % b
@@ -163,6 +168,14 @@ pub enum DotAccess {
     DotAccessX,
     DotAccessY,
     DotAccessZ,
+}
+#[derive(Clone, Copy, Debug)]
+pub enum Comparison {
+    Eq,
+    Ge,
+    Gt,
+    Le,
+    Lt,
 }
 mod ast_node_impl {
 
