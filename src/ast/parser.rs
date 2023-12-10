@@ -120,7 +120,7 @@ impl<'a> Parser<'a> {
             if !p.is_err() {
                 ctr += 1;
             } else {
-                problems.push((*k, p.unwrap_err()));
+                problems.push((p.unwrap_err()));
             }
         }
         let end = std::time::Instant::now();
