@@ -4,7 +4,6 @@ use anyhow::Result;
 use desmoparse::{
     ast::parser::Parser,
     interop::graph_state::{Expression, Graph},
-    util::LexIter,
 };
 
 fn main() -> Result<()> {

@@ -3,7 +3,7 @@ use std::{
     collections::{hash_map::Entry, HashMap},
 };
 
-use logos::{Lexer, Logos};
+use logos::Logos;
 use thin_vec::{thin_vec, ThinVec};
 
 use anyhow::{bail, Context, Result};
@@ -120,7 +120,7 @@ impl<'a> Parser<'a> {
             if !p.is_err() {
                 ctr += 1;
             } else {
-                problems.push((p.unwrap_err()));
+                problems.push(p.unwrap_err());
             }
         }
         let end = std::time::Instant::now();
@@ -206,7 +206,7 @@ impl<'a> Parser<'a> {
     fn parse_fn_args(
         &self,
         lexer: &mut MultiPeek<LexIter<'a, Token>>,
-        mut vars: ThinVec<ASTNode<'a>>,
+        vars: ThinVec<ASTNode<'a>>,
     ) -> Result<ThinVec<ASTNode<'a>>> {
         self.parse_args(lexer, vars, Token::RParen)
     }
@@ -281,7 +281,7 @@ impl<'a> Parser<'a> {
             // TODO: piecewise functions
             Token::LGroup => {
                 if lexer.peek_next_res()?.1 == Token::RGroup {
-                    lexer.discard();
+                    lexer.discard()?;
                     ASTNodeType::Val(Value::ConstantI64(1)).into()
                 } else {
                     let mut v = ThinVec::with_capacity(2);
@@ -498,7 +498,7 @@ impl<'a> Parser<'a> {
                 t if t.ends_parse() => {
                     break;
                 }
-                t => {
+                _t => {
                     //This is super jank but we unconditionally pop the lexer every iteration so...
                     lexer.push(("*", Token::Mul));
                     Opcode::Mul
@@ -529,12 +529,12 @@ impl<'a> Parser<'a> {
                             }
                         }
                     }
-                    (Opcode::Parens, a) => {
+                    (Opcode::Parens, _a) => {
                         let rhs = self.recursive_parse_expr(lexer, 0)?;
                         assert_token_matches!(lexer, Token::RParen);
                         lhs = ASTNodeType::Mul(lhs, rhs).into();
                     }
-                    (Opcode::Index, node) => {
+                    (Opcode::Index, _node) => {
                         let rhs = self.recursive_parse_expr(lexer, 0)?;
                         match lexer.next_res()?.1 {
                             Token::RBracket => lhs = ASTNodeType::Index(lhs, rhs).into(),
