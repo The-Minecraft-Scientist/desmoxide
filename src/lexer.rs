@@ -1,14 +1,16 @@
 pub use categories::*;
 /// Lexer token
 #[derive(logos::Logos, Debug, PartialEq, Clone, Copy)]
-#[logos(skip r"[ \t\n\f]+|\\+left|\\+right")]
+#[logos(skip r"[ \t\n\f]+")]
 pub enum Token {
     // LITERALS --------------------------------------------
     /// Floating point literal
-    #[regex("[0-9]*\\.[0-9]+", |lex| {lex.slice().parse().ok()})]
+    #[regex(r"[0-9]*\.[0-9]+", |lex| {lex.slice().parse().ok()})]
     FloatLit(f64),
     ///Integer literal
+
     #[regex(r"\d+", |lex| {lex.slice().parse().ok()})]
+    #[token(r"\left\{\right\}", callback = |_| Some(1))]
     IntegerLit(i64),
 
     // IDENTIFIERS -----------------------------------------
@@ -46,12 +48,16 @@ pub enum Token {
     // COMPARISON OPERATORS --------------------------------
     #[token(r"=")]
     Eq,
+    #[token(r"≥")]
     #[token(r"\ge")]
     Ge,
+    #[token(r"≤")]
     #[token(r"\le")]
     Le,
+    #[token(r">")]
     #[token(r"\gt")]
     Gt,
+    #[token(r"<")]
     #[token(r"\lt")]
     Lt,
 
@@ -130,6 +136,10 @@ pub enum Token {
     Floor,
     #[token(r"\operatorname{ceil}")]
     Ceil,
+
+    #[token(r"\left", logos::skip)]
+    #[token(r"\right", logos::skip)]
+    Invalid,
 }
 mod categories {
     use anyhow::{bail, Result};

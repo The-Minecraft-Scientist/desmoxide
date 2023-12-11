@@ -16,12 +16,12 @@ use super::{
 };
 use crate::{
     assert_token_matches,
-    ast::{List, Opcode, Value},
+    ast::{List, Opcode, PiecewiseEntry, Value},
     bad_token,
     lexer::Token,
     util::{multipeek::MultiPeek, LexIter},
 };
-
+#[derive(Debug)]
 pub struct Parser<'a> {
     pub storage: &'a HashMap<u32, &'a str>,
     pub meta: RefCell<HashMap<u32, ExpressionMeta<'a>>>,
@@ -33,15 +33,15 @@ impl<'a> Parser<'a> {
             storage: lines,
         }
     }
-    pub fn line_lexer(&self, line: u32) -> Result<Lexer<'a, Token>> {
-        Ok(Token::lexer(
+    pub fn line_lexer(&self, line: u32) -> Result<MultiPeek<LexIter<'a, Token>>> {
+        Ok(MultiPeek::new(LexIter::new(Token::lexer(
             *self
                 .storage
                 .get(&line)
                 .context(format!("line with ID {} not found!", line))?,
-        ))
+        ))))
     }
-    fn scan_expression_type(
+    pub fn scan_expression_type(
         &self,
         idx: u32,
         lexer: &mut MultiPeek<LexIter<'a, Token>>,
@@ -134,18 +134,18 @@ impl<'a> Parser<'a> {
         Ok(())
     }
     pub fn parse_expr(&self, idx: u32) -> Result<()> {
-        let mut lex = MultiPeek::new(LexIter::new(self.line_lexer(idx)?));
+        let mut lex = self.line_lexer(idx)?;
         self.scan_expression_type(idx, &mut lex)?;
-        let mut lhs = None;
+        let mut rhs = None;
         if let Some(_) = lex.peek_next() {
-            lhs = Some(self.recursive_parse_expr(&mut lex, 0)?);
+            rhs = Some(self.recursive_parse_expr(&mut lex, 0)?);
         }
         {
             match self.meta.borrow_mut().entry(idx) {
-                Entry::Occupied(mut v) => v.get_mut().cached_lhs_ast = lhs,
+                Entry::Occupied(mut v) => v.get_mut().cached_rhs_ast = rhs,
                 Entry::Vacant(a) => {
                     let mut v = ExpressionMeta::INVALID;
-                    v.cached_lhs_ast = lhs;
+                    v.cached_rhs_ast = rhs;
                     a.insert(v);
                 }
             }
@@ -187,7 +187,10 @@ impl<'a> Parser<'a> {
                 List::List(vars)
             }
             //Single element list
-            Token::RBracket => List::List(thin_vec![first_scope]),
+            Token::RBracket => {
+                assert_token_matches!(lexer, Token::RBracket);
+                List::List(thin_vec![first_scope])
+            }
             t => {
                 bad_token!(next_token.0, t, "parsing list")
             }
@@ -263,6 +266,7 @@ impl<'a> Parser<'a> {
     ) -> Result<ASTNode<'a>> {
         //get LHS token
         let next = lexer.next_res()?;
+
         let mut lhs = match next.1 {
             //Identifier
             Token::Ident => ASTNodeType::Val(next.0.into()).into(),
@@ -276,9 +280,59 @@ impl<'a> Parser<'a> {
             }
             // TODO: piecewise functions
             Token::LGroup => {
-                let ret = self.recursive_parse_expr(lexer, 0)?;
-                {}
-                bail!("piecewises are unimplemented")
+                if lexer.peek_next_res()?.1 == Token::RGroup {
+                    lexer.discard();
+                    ASTNodeType::Val(Value::ConstantI64(1)).into()
+                } else {
+                    let mut v = ThinVec::with_capacity(2);
+                    let left = self.recursive_parse_expr(lexer, 0)?;
+                    let n = lexer.next_res()?;
+                    if !n.1.is_comparison() {
+                        bail!("Piecewises must have at least one condition");
+                    }
+
+                    let right = self.recursive_parse_expr(lexer, 0)?;
+                    assert_token_matches!(lexer, Token::Colon);
+                    let result = self.recursive_parse_expr(lexer, 0)?;
+                    v.push(PiecewiseEntry {
+                        lhs: left,
+                        comp: n.1.as_comparison()?,
+                        rhs: right,
+                        result,
+                    });
+                    loop {
+                        match lexer.next_res()?.1 {
+                            Token::Comma => {
+                                let s = self.recursive_parse_expr(lexer, 0)?;
+                                match lexer.peek_next_res()?.1 {
+                                    Token::RGroup => {
+                                        break ASTNodeType::Piecewise {
+                                            default: s,
+                                            entries: v,
+                                        };
+                                    }
+                                    t if t.is_comparison() => {
+                                        let right = self.recursive_parse_expr(lexer, 0)?;
+                                        let result = if lexer.peek_next_res()?.1 == Token::Comma {
+                                            ASTNodeType::Val(Value::ConstantI64(1)).into()
+                                        } else {
+                                            self.recursive_parse_expr(lexer, 0)?
+                                        };
+                                        v.push(PiecewiseEntry {
+                                            lhs: s,
+                                            comp: t.as_comparison()?,
+                                            rhs: right,
+                                            result,
+                                        });
+                                    }
+                                    t => bad_token!("", t, "while parsing piecewise"),
+                                }
+                            }
+                            t => bad_token!("", t, "expected comma"),
+                        }
+                    }
+                    .into()
+                }
             }
             Token::LParen => {
                 let ret = self.recursive_parse_expr(lexer, 0)?;
@@ -356,6 +410,7 @@ impl<'a> Parser<'a> {
             }
             t => bad_token!(next.0, t, "getting lhs"),
         };
+
         //Loop across this level
         loop {
             let Some(a) = *lexer.peek_next() else { break };
@@ -363,7 +418,15 @@ impl<'a> Parser<'a> {
                 Token::Plus => Opcode::Add,
                 Token::Minus => Opcode::Sub,
                 Token::Mul => Opcode::Mul,
-                Token::Pow => Opcode::Pow,
+                Token::Pow => {
+                    lexer.discard()?;
+                    assert_token_matches!(lexer, Token::LGroup);
+                    let exp = self.recursive_parse_expr(lexer, 0)?;
+                    assert_token_matches!(lexer, Token::RGroup);
+
+                    lhs = ASTNodeType::Pow(lhs, exp).into();
+                    continue;
+                }
                 Token::LBracket => Opcode::Index,
                 Token::LParen => Opcode::Parens,
                 Token::Dot => {

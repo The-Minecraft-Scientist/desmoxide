@@ -155,6 +155,11 @@ pub enum ASTNodeType<'a> {
     Mod(ASTNode<'a>, ASTNode<'a>),
     Floor(ASTNode<'a>),
     Ceil(ASTNode<'a>),
+
+    Piecewise {
+        default: ASTNode<'a>,
+        entries: ThinVec<PiecewiseEntry<'a>>,
+    },
 }
 #[derive(Debug, Clone)]
 pub enum List<'a> {
@@ -204,6 +209,13 @@ mod ast_node_impl {
 #[derive(Debug, Clone)]
 pub struct ListCompInfo<'a> {
     vars: ThinVec<(Ident<'a>, ASTNode<'a>)>,
+}
+#[derive(Debug, Clone)]
+pub struct PiecewiseEntry<'a> {
+    lhs: ASTNode<'a>,
+    comp: Comparison,
+    rhs: ASTNode<'a>,
+    result: ASTNode<'a>,
 }
 
 #[derive(Clone, Debug)]

@@ -675,6 +675,12 @@
                     "id": "513",
                     "color": "#c74440",
                     "latex": "a=0"
+                },
+                {
+                    "type": "expression",
+                    "id": "514",
+                    "color": "#c74440",
+                    "latex": "\\frac{\\sqrt[\\left\\{\\right\\}]{\\left\\{\\right\\}^{\\left\\{\\right\\}}}}{\\left[\\left\\{\\right\\}+\\left\\{\\right\\}\\right]}\\left[\\left\\{\\right\\}=\\left\\{\\right\\}\\right]\\left[\\left\\{\\right\\}\\right]"
                 }
             ]
         }
