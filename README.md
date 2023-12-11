@@ -1,4 +1,5 @@
-desmos god mode but its actually godly.
+## Desmoxide
+desmos, but its incredibly fast
 
 ### planned features
  * parse and lower desmos expressions to performance-centric, statically typed mid-level IR
