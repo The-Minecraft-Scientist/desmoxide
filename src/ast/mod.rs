@@ -164,8 +164,8 @@ pub enum ASTNodeType<'a> {
 #[derive(Debug, Clone)]
 pub enum List<'a> {
     ListComp(ASTNode<'a>, ListCompInfo<'a>), // List defined by a list comphrehension inner member stored in the child node
-    Range(ASTNode<'a>, ASTNode<'a>),         // List defined by a vector of AST nodes
-    List(ThinVec<ASTNode<'a>>),              // List defined by a range of values
+    Range(ASTNode<'a>, ASTNode<'a>),         // List defined by a range of values
+    List(ThinVec<ASTNode<'a>>),              // List defined by a vector of AST nodes
 }
 
 #[derive(Clone, Copy, Debug)]
