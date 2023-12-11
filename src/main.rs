@@ -22,8 +22,8 @@ fn main() -> Result<()> {
         }
     }
     let p = Parser::new(&m);
-    //p.update_all()?;
-    p.parse_expr(448)?;
+    p.update_all()?;
+    //p.parse_expr(448)?;
 
     Ok(())
 }
