@@ -65,19 +65,3 @@ impl PartialOrd for IRInstruction {
 pub struct IRChunk {
     typ: FnType,
 }
-
-pub struct Funny1 {}
-
-impl Deref for Funny1 {
-    type Target = Funny2;
-    fn deref(&self) -> &Self::Target {
-        &Funny2 {}
-    }
-}
-pub struct Funny2 {}
-impl Deref for Funny2 {
-    type Target = Funny1;
-    fn deref(&self) -> &Self::Target {
-        &Funny2 {}
-    }
-}
