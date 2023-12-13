@@ -11,7 +11,7 @@ use anyhow::{bail, Context, Result};
 use super::{
     expression::{EquationType, ExpressionMeta, ExpressionType},
     ASTNode, ASTNodeType,
-    DotAccess::*,
+    CoordinateAccess::*,
     Ident, ListCompInfo,
 };
 use crate::{

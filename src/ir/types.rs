@@ -4,7 +4,8 @@ use thin_vec::ThinVec;
 pub enum ValueType {
     Number,
     Point,
-    List(&'static Self),
+    ListOfPoint,
+    ListOfNum,
 }
 
 #[derive(Clone, Debug)]

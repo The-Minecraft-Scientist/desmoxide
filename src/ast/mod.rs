@@ -146,7 +146,7 @@ pub enum ASTNodeType<'a> {
     Unique(ASTNode<'a>),
     // Random can be called with 0, 1, or 2 arguments
     Random(Option<(ASTNode<'a>, Option<ASTNode<'a>>)>),
-    CoordinateAccess(ASTNode<'a>, DotAccess),
+    CoordinateAccess(ASTNode<'a>, CoordinateAccess),
     //comparison operator
     Comp(ASTNode<'a>, Comparison, ASTNode<'a>),
 
@@ -168,13 +168,13 @@ pub enum List<'a> {
     List(ThinVec<ASTNode<'a>>),              // List defined by a vector of AST nodes
 }
 
-#[derive(Clone, Copy, Debug)]
-pub enum DotAccess {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CoordinateAccess {
     DotAccessX,
     DotAccessY,
     DotAccessZ,
 }
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Comparison {
     Eq,
     Ge,

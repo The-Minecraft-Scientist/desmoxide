@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
-use desmoparse::{
+use desmoxide::{
     ast::parser::Parser,
     interop::graph_state::{Expression, Graph},
 };
