@@ -1,29 +1,33 @@
 #![allow(unused)]
 pub mod expression;
+mod parse_manager;
 pub mod parser;
-
 use crate::util::thin_str::ThinStr;
 //Re-export stuff from private scopes (used to keep enum name collisions down)
 pub use ast_impl::*;
 pub use ast_node_impl::*;
 pub use bp::*;
 
-use std::ops::{Deref, DerefMut};
+use std::{
+    num::{NonZeroU64, NonZeroUsize},
+    ops::{Deref, DerefMut},
+};
 use thin_vec::ThinVec;
 
 #[derive(Debug, Clone)]
-pub struct ASTNode<'a>(Box<ASTNodeType<'a>>);
+pub struct ASTNodeRef(NonZeroUsize);
 
 mod ast_impl {
     use anyhow::{bail, Result};
+    use thin_vec::ThinVec;
 
     use crate::lexer::Token;
     use crate::lexer::Token::*;
 
-    use super::{ASTNode, ASTNodeType as AN, List, Opcode as OP};
+    use super::{ASTNode as AN, ASTNodeRef, List, Opcode as OP};
 
-    impl<'a> ASTNode<'a> {
-        pub fn new_simple_with_node(token: Token, inner: ASTNode<'a>) -> Result<Self> {
+    impl<'a> AN<'a> {
+        pub fn new_simple_with_node(token: Token, inner: ASTNodeRef) -> Result<Self> {
             Ok(match token {
                 //trig
                 Sin => AN::Sin(inner),
@@ -42,18 +46,15 @@ mod ast_impl {
                 Floor => AN::Floor(inner),
 
                 t => bail!("token {:?} is not a simple builtin", t),
-            }
-            .into())
+            })
         }
-        pub fn new_simple_2arg(token: Token, arg0: ASTNode<'a>, arg1: ASTNode<'a>) -> Result<Self> {
+        pub fn new_simple_2arg(token: Token, arg0: ASTNodeRef, arg1: ASTNodeRef) -> Result<Self> {
             Ok(match token {
                 Token::Mod => AN::Mod(arg0, arg1),
                 t => bail!("token {:?} is not a simple 2-argument builtin", t),
-            }
-            .into())
+            })
         }
-        pub fn new_autojoin_fn(token: Token, argl: List<'a>) -> Result<Self> {
-            let arg = AN::List(argl).into();
+        pub fn new_autojoin_fn(token: Token, arg: ThinVec<ASTNodeRef>) -> Result<Self> {
             Ok(match token {
                 Min => AN::Min(arg),
                 Max => AN::Max(arg),
@@ -61,111 +62,92 @@ mod ast_impl {
                 Total => AN::Total(arg),
                 Join => AN::Join(arg),
                 t => bail!("token {:?} does not autojoin its arguments", t),
-            }
-            .into())
+            })
         }
-        pub fn new_opcode_2arg(op: OP, arg0: ASTNode<'a>, arg1: ASTNode<'a>) -> Self {
+        pub fn new_opcode_2arg(op: OP, arg0: ASTNodeRef, arg1: ASTNodeRef) -> Self {
             match op {
-                OP::Add => AN::Add(arg0, arg1).into(),
-                OP::Sub => AN::Sub(arg0, arg1).into(),
-                OP::Mul => AN::Mul(arg0, arg1).into(),
-                OP::Div => AN::Div(arg0, arg1).into(),
-                OP::Pow => AN::Pow(arg0, arg1).into(),
+                OP::Add => AN::Add(arg0, arg1),
+                OP::Sub => AN::Sub(arg0, arg1),
+                OP::Mul => AN::Mul(arg0, arg1),
+                OP::Div => AN::Div(arg0, arg1),
+                OP::Pow => AN::Pow(arg0, arg1),
                 _ => panic!("not a 2 arg operation"),
             }
         }
     }
 }
 
-impl<'a> Deref for ASTNode<'a> {
-    type Target = ASTNodeType<'a>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-impl<'a> DerefMut for ASTNode<'a> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-impl<'a> From<ASTNodeType<'a>> for ASTNode<'a> {
-    fn from(value: ASTNodeType<'a>) -> Self {
-        ASTNode(Box::new(value))
-    }
-}
-
 #[derive(Clone, Debug)]
-pub enum ASTNodeType<'a> {
+pub enum ASTNode<'a> {
     Val(Value<'a>),
-    Add(ASTNode<'a>, ASTNode<'a>),
-    Sub(ASTNode<'a>, ASTNode<'a>),
-    Mul(ASTNode<'a>, ASTNode<'a>),
-    Div(ASTNode<'a>, ASTNode<'a>),
-    Pow(ASTNode<'a>, ASTNode<'a>),
-    NthRoot(ASTNode<'a>, ASTNode<'a>),
+    Add(ASTNodeRef, ASTNodeRef),
+    Sub(ASTNodeRef, ASTNodeRef),
+    Mul(ASTNodeRef, ASTNodeRef),
+    Div(ASTNodeRef, ASTNodeRef),
+    Pow(ASTNodeRef, ASTNodeRef),
+    NthRoot(ASTNodeRef, ASTNodeRef),
     // Unary operators
-    Neg(ASTNode<'a>),
-    Sqrt(ASTNode<'a>),
+    Neg(ASTNodeRef),
+    Sqrt(ASTNodeRef),
 
-    Parens(Ident<'a>, ASTNode<'a>), // Ambiguous case, either multiplication by juxtaposition or a function call
-    FunctionCall(Ident<'a>, ThinVec<ASTNode<'a>>), // Function with its list of arguments
-    Index(ASTNode<'a>, ASTNode<'a>), // List indexing operations
+    Parens(Ident<'a>, ASTNodeRef), // Ambiguous case, either multiplication by juxtaposition or a function call
+    FunctionCall(Ident<'a>, ThinVec<ASTNodeRef>), // Function with its list of arguments
+    Index(ASTNodeRef, ASTNodeRef), // List indexing operations
 
     List(List<'a>), //List
-    ListFilt(ASTNode<'a>, Comparison, ASTNode<'a>),
+    ListFilt(ASTNodeRef, ASTNodeRef, Comparison, ASTNodeRef),
 
-    Point(ASTNode<'a>, ASTNode<'a>),
+    Point(ASTNodeRef, ASTNodeRef),
 
     //Trigonometric functions
-    Sin(ASTNode<'a>),
-    Cos(ASTNode<'a>),
-    Tan(ASTNode<'a>),
-    Csc(ASTNode<'a>),
-    Sec(ASTNode<'a>),
-    Cot(ASTNode<'a>),
-    InvSin(ASTNode<'a>),
-    InvCos(ASTNode<'a>),
-    InvTan(ASTNode<'a>),
-    InvCsc(ASTNode<'a>),
-    InvSec(ASTNode<'a>),
-    InvCot(ASTNode<'a>),
+    Sin(ASTNodeRef),
+    Cos(ASTNodeRef),
+    Tan(ASTNodeRef),
+    Csc(ASTNodeRef),
+    Sec(ASTNodeRef),
+    Cot(ASTNodeRef),
+    InvSin(ASTNodeRef),
+    InvCos(ASTNodeRef),
+    InvTan(ASTNodeRef),
+    InvCsc(ASTNodeRef),
+    InvSec(ASTNodeRef),
+    InvCot(ASTNodeRef),
 
     //List builtins
-    Min(ASTNode<'a>),
-    Max(ASTNode<'a>),
-    Count(ASTNode<'a>),
-    Total(ASTNode<'a>),
-    Join(ASTNode<'a>),
-    Length(ASTNode<'a>),
+    Min(ThinVec<ASTNodeRef>),
+    Max(ThinVec<ASTNodeRef>),
+    Count(ThinVec<ASTNodeRef>),
+    Total(ThinVec<ASTNodeRef>),
+    Join(ThinVec<ASTNodeRef>),
+    Length(ThinVec<ASTNodeRef>),
 
     // 2 argument sort is optional
-    Sort(ASTNode<'a>, Option<ASTNode<'a>>),
+    Sort(ASTNodeRef, Option<ASTNodeRef>),
     // Seed argument is optional
-    Shuffle(ASTNode<'a>, Option<ASTNode<'a>>),
-    Unique(ASTNode<'a>),
+    Shuffle(ASTNodeRef, Option<ASTNodeRef>),
+    Unique(ASTNodeRef),
     // Random can be called with 0, 1, or 2 arguments
-    Random(Option<(ASTNode<'a>, Option<ASTNode<'a>>)>),
-    CoordinateAccess(ASTNode<'a>, CoordinateAccess),
+    Random(Option<(ASTNodeRef, Option<ASTNodeRef>)>),
+    CoordinateAccess(ASTNodeRef, CoordinateAccess),
     //comparison operator
-    Comp(ASTNode<'a>, Comparison, ASTNode<'a>),
+    Comp(ASTNodeRef, Comparison, ASTNodeRef),
 
     // "number theory functions"
     /// a % b
-    Mod(ASTNode<'a>, ASTNode<'a>),
-    Floor(ASTNode<'a>),
-    Ceil(ASTNode<'a>),
+    Mod(ASTNodeRef, ASTNodeRef),
+    Floor(ASTNodeRef),
+    Ceil(ASTNodeRef),
 
     Piecewise {
-        default: ASTNode<'a>,
-        entries: ThinVec<PiecewiseEntry<'a>>,
+        default: ASTNodeRef,
+        entries: ThinVec<PiecewiseEntry>,
     },
 }
 #[derive(Debug, Clone)]
 pub enum List<'a> {
-    ListComp(ASTNode<'a>, ListCompInfo<'a>), // List defined by a list comphrehension inner member stored in the child node
-    Range(ASTNode<'a>, ASTNode<'a>),         // List defined by a range of values
-    List(ThinVec<ASTNode<'a>>),              // List defined by a vector of AST nodes
+    ListComp(ASTNodeRef, ListCompInfo<'a>), // List defined by a list comphrehension inner member stored in the child node
+    Range(ASTNodeRef, ASTNodeRef),          // List defined by a range of values
+    List(ThinVec<ASTNodeRef>),              // List defined by a vector of AST nodes
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -184,10 +166,10 @@ pub enum Comparison {
 }
 mod ast_node_impl {
 
-    use super::ASTNodeType;
-    use super::ASTNodeType::*;
+    use super::ASTNode;
+    use super::ASTNode::*;
 
-    impl<'a> ASTNodeType<'a> {
+    impl<'a> ASTNode<'a> {
         pub fn can_be_list(&self) -> bool {
             matches!(
                 self,
@@ -208,14 +190,14 @@ mod ast_node_impl {
 }
 #[derive(Debug, Clone)]
 pub struct ListCompInfo<'a> {
-    vars: ThinVec<(Ident<'a>, ASTNode<'a>)>,
+    vars: ThinVec<(Ident<'a>, ASTNodeRef)>,
 }
 #[derive(Debug, Clone)]
-pub struct PiecewiseEntry<'a> {
-    lhs: ASTNode<'a>,
+pub struct PiecewiseEntry {
+    lhs: ASTNodeRef,
     comp: Comparison,
-    rhs: ASTNode<'a>,
-    result: ASTNode<'a>,
+    rhs: ASTNodeRef,
+    result: ASTNodeRef,
 }
 
 #[derive(Clone, Debug)]

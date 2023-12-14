@@ -1,11 +1,12 @@
 use thin_vec::ThinVec;
 
-use super::{ASTNode, Ident, Opcode};
+use super::{parse_manager::AST, ASTNode, ASTNodeRef, Ident, Opcode};
 
 #[derive(Debug, Clone)]
 pub struct ExpressionMeta<'a> {
-    pub cached_rhs_ast: Option<ASTNode<'a>>,
-    pub cached_lhs_ast: Option<ASTNode<'a>>,
+    pub cached_rhs_ast: Option<AST<'a>>,
+    pub cached_lhs_ast: Option<AST<'a>>,
+    pub ast: Vec<ASTNode<'a>>,
     pub expression_type: Option<ExpressionType<'a>>,
 }
 impl<'a> ExpressionMeta<'a> {
@@ -25,6 +26,7 @@ impl<'a> ExpressionMeta<'a> {
         cached_lhs_ast: None,
         cached_rhs_ast: None,
         expression_type: None,
+        ast: Vec::new(),
     };
 }
 
