@@ -78,6 +78,7 @@ mod ast_impl {
 }
 
 #[derive(Clone, Debug)]
+//TODO: this is 32 bytes for some reason. It should be 24
 pub enum ASTNode<'a> {
     Val(Value<'a>),
     Add(ASTNodeRef, ASTNodeRef),

@@ -27,8 +27,6 @@ pub struct Parser<'a> {
     pub storage: &'a HashMap<u32, &'a str>,
     pub meta: RefCell<HashMap<u32, ExpressionMeta<'a>>>,
 }
-
-pub struct AST {}
 impl<'a> Parser<'a> {
     pub fn new(lines: &'a HashMap<u32, &'a str>) -> Self {
         Self {
