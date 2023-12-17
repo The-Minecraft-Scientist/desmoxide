@@ -1,6 +1,6 @@
 #![allow(unused)]
 pub mod expression;
-mod parse_manager;
+pub mod parse_manager;
 pub mod parser;
 use crate::util::thin_str::ThinStr;
 //Re-export stuff from private scopes (used to keep enum name collisions down)
@@ -14,7 +14,7 @@ use std::{
 };
 use thin_vec::ThinVec;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct ASTNodeRef(NonZeroUsize);
 
 mod ast_impl {

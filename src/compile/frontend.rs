@@ -1,7 +1,9 @@
-use crate::ast::parser::Parser;
+use std::collections::HashMap;
 
-impl<'a> Parser<'a> {
-    pub fn expression_chunk(&self, idx: u32) -> ! {
-        todo!()
-    }
+use crate::ast::{parser::Parser, Ident};
+
+use super::ir::Id;
+
+pub struct IdentMap<'source> {
+    inner: HashMap<Ident<'source>, Option<Id>>,
 }
