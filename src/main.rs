@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use anyhow::Result;
 use desmoxide::{
     ast::parser::Parser,
-    interop::graph_state::{Expression, Graph},
+    interop::{Expression, Graph},
 };
 
 fn main() -> Result<()> {
