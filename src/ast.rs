@@ -58,14 +58,14 @@ mod ast_impl {
                 t => bail!("token {:?} does not autojoin its arguments", t),
             })
         }
-        pub fn new_simple_binary(tok: Token, arg0: ASTNodeRef, arg1: ASTNodeRef) -> Result<Self> {
-            Ok(match tok {
-                Mod => AN::Binary(arg0, arg1, B::Mod),
-                Add => AN::Binary(arg0, arg1, B::Add),
-                Sub => AN::Binary(arg0, arg1, B::Sub),
-                Mul => AN::Binary(arg0, arg1, B::Mul),
-                Div => AN::Binary(arg0, arg1, B::Div),
-                Pow => AN::Binary(arg0, arg1, B::Pow),
+        pub fn new_simple_binary(op: OP, arg0: ASTNodeRef, arg1: ASTNodeRef) -> Result<Self> {
+            Ok(match op {
+                OP::Mod => AN::Binary(arg0, arg1, B::Mod),
+                OP::Add => AN::Binary(arg0, arg1, B::Add),
+                OP::Sub => AN::Binary(arg0, arg1, B::Sub),
+                OP::Mul => AN::Binary(arg0, arg1, B::Mul),
+                OP::Div => AN::Binary(arg0, arg1, B::Div),
+                OP::Pow => AN::Binary(arg0, arg1, B::Pow),
                 t => bail!("{:?} not a binary operation", t),
             })
         }
@@ -244,10 +244,7 @@ pub enum Opcode {
     Div,
     Mul,
     Pow,
-    Ge,
-    Le,
-    Gt,
-    Lt,
+    Mod,
     Index,
     Parens,
     Comma,

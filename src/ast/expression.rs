@@ -1,6 +1,6 @@
 use thin_vec::ThinVec;
 
-use super::{parse_manager::AST, ASTNode, ASTNodeRef, Ident, Opcode};
+use super::{parse_manager::AST, ASTNode, ASTNodeRef, Comparison, Ident, Opcode};
 
 #[derive(Debug, Clone)]
 pub struct ExpressionMeta<'a> {
@@ -45,5 +45,5 @@ pub enum ExpressionType<'a> {
 pub enum EquationType {
     Implicit,
     Explicit,
-    InEq(Opcode),
+    InEq(Comparison),
 }

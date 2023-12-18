@@ -307,13 +307,13 @@ impl<'a> ParseManager<'a> {
                 assert_token_matches!(self.lexer, Token::RParen);
                 ASTNode::new_simple_with_node(t, inner)?
             }
-            t if t.is_simple_2arg() => {
+            t if t.binary_builtin().is_some() => {
                 assert_token_matches!(self.lexer, Token::LParen);
                 let arg0 = self.parse_placed(0)?;
                 assert_token_matches!(self.lexer, Token::Comma);
                 let arg1 = self.parse_placed(0)?;
                 assert_token_matches!(self.lexer, Token::RParen);
-                ASTNode::new_simple_binary(t, arg0, arg1)?
+                ASTNode::new_simple_binary(t.binary_builtin().unwrap(), arg0, arg1)?
             }
             t if t.should_autojoin_args() => {
                 let arg = self.parse_autojoin_args()?;
@@ -484,7 +484,7 @@ impl<'a> ParseManager<'a> {
                 let _ = self.lexer.next();
                 let rhs = self.parse_expr(bp.right)?;
 
-                lhs = ASTNode::new_simple_binary(a.1, self.place(lhs), self.place(rhs))?;
+                lhs = ASTNode::new_simple_binary(op, self.place(lhs), self.place(rhs))?;
                 continue;
             }
             break;

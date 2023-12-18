@@ -144,7 +144,7 @@ pub enum Token {
 mod categories {
     use anyhow::{bail, Result};
 
-    use crate::ast::Comparison;
+    use crate::ast::{Comparison, Opcode};
 
     use super::Token;
     use super::Token::*;
@@ -176,8 +176,11 @@ mod categories {
                     | Ceil
             )
         }
-        pub fn is_simple_2arg(&self) -> bool {
-            matches!(self, Mod)
+        pub fn binary_builtin(&self) -> Option<Opcode> {
+            match self {
+                Self::Mod => Some(Opcode::Mod),
+                _ => None,
+            }
         }
         pub fn suffix_call_allowed(&self) -> bool {
             //TODO: this should be exhaustive

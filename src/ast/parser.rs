@@ -11,7 +11,7 @@ use anyhow::{bail, Context, Result};
 use super::{
     expression::{EquationType, ExpressionMeta, ExpressionType},
     parse_manager::ParseManager,
-    ASTNode, ASTNodeRef,
+    ASTNode, ASTNodeRef, Comparison,
     CoordinateAccess::*,
     Ident, ListCompInfo,
 };
@@ -90,10 +90,10 @@ impl<'a> Parser<'a> {
             let next = lexer.next_res();
             if let Ok(n) = next {
                 let s = match n.1 {
-                    Token::Gt => EquationType::InEq(Opcode::Gt),
-                    Token::Ge => EquationType::InEq(Opcode::Ge),
-                    Token::Lt => EquationType::InEq(Opcode::Lt),
-                    Token::Le => EquationType::InEq(Opcode::Le),
+                    Token::Gt => EquationType::InEq(Comparison::Gt),
+                    Token::Ge => EquationType::InEq(Comparison::Ge),
+                    Token::Lt => EquationType::InEq(Comparison::Lt),
+                    Token::Le => EquationType::InEq(Comparison::Le),
                     Token::Eq => EquationType::Implicit,
                     t => {
                         bad_token!(n.0, t, "determining expression type")
