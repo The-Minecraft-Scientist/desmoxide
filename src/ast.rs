@@ -24,34 +24,28 @@ mod ast_impl {
     use crate::lexer::Token;
     use crate::lexer::Token::*;
 
-    use super::{ASTNode as AN, ASTNodeRef, List, Opcode as OP};
+    use super::{ASTNode as AN, ASTNodeRef, BinaryOp as B, List, Opcode as OP, UnaryOp as U};
 
     impl<'a> AN<'a> {
         pub fn new_simple_with_node(token: Token, inner: ASTNodeRef) -> Result<Self> {
             Ok(match token {
                 //trig
-                Sin => AN::Sin(inner),
-                Cos => AN::Cos(inner),
-                Tan => AN::Tan(inner),
-                Csc => AN::Csc(inner),
-                Sec => AN::Sec(inner),
-                Cot => AN::Cot(inner),
-                InvSin => AN::InvSin(inner),
-                InvCos => AN::InvCos(inner),
-                InvTan => AN::InvTan(inner),
-                InvCsc => AN::InvCsc(inner),
-                InvSec => AN::InvSec(inner),
-                InvCot => AN::InvCot(inner),
-                Ceil => AN::Ceil(inner),
-                Floor => AN::Floor(inner),
+                Sin => AN::Unary(inner, U::Sin),
+                Cos => AN::Unary(inner, U::Cos),
+                Tan => AN::Unary(inner, U::Tan),
+                Csc => AN::Unary(inner, U::Csc),
+                Sec => AN::Unary(inner, U::Sec),
+                Cot => AN::Unary(inner, U::Cot),
+                InvSin => AN::Unary(inner, U::InvSin),
+                InvCos => AN::Unary(inner, U::InvCos),
+                InvTan => AN::Unary(inner, U::InvTan),
+                InvCsc => AN::Unary(inner, U::InvCsc),
+                InvSec => AN::Unary(inner, U::InvSec),
+                InvCot => AN::Unary(inner, U::InvCot),
+                Ceil => AN::Unary(inner, U::Ceil),
+                Floor => AN::Unary(inner, U::Floor),
 
                 t => bail!("token {:?} is not a simple builtin", t),
-            })
-        }
-        pub fn new_simple_2arg(token: Token, arg0: ASTNodeRef, arg1: ASTNodeRef) -> Result<Self> {
-            Ok(match token {
-                Token::Mod => AN::Mod(arg0, arg1),
-                t => bail!("token {:?} is not a simple 2-argument builtin", t),
             })
         }
         pub fn new_autojoin_fn(token: Token, arg: ThinVec<ASTNodeRef>) -> Result<Self> {
@@ -64,15 +58,16 @@ mod ast_impl {
                 t => bail!("token {:?} does not autojoin its arguments", t),
             })
         }
-        pub fn new_opcode_2arg(op: OP, arg0: ASTNodeRef, arg1: ASTNodeRef) -> Self {
-            match op {
-                OP::Add => AN::Add(arg0, arg1),
-                OP::Sub => AN::Sub(arg0, arg1),
-                OP::Mul => AN::Mul(arg0, arg1),
-                OP::Div => AN::Div(arg0, arg1),
-                OP::Pow => AN::Pow(arg0, arg1),
-                _ => panic!("not a 2 arg operation"),
-            }
+        pub fn new_simple_binary(tok: Token, arg0: ASTNodeRef, arg1: ASTNodeRef) -> Result<Self> {
+            Ok(match tok {
+                Mod => AN::Binary(arg0, arg1, B::Mod),
+                Add => AN::Binary(arg0, arg1, B::Add),
+                Sub => AN::Binary(arg0, arg1, B::Sub),
+                Mul => AN::Binary(arg0, arg1, B::Mul),
+                Div => AN::Binary(arg0, arg1, B::Div),
+                Pow => AN::Binary(arg0, arg1, B::Pow),
+                t => bail!("{:?} not a binary operation", t),
+            })
         }
     }
 }
@@ -81,38 +76,20 @@ mod ast_impl {
 //TODO: this is 32 bytes for some reason. It should be 24
 pub enum ASTNode<'a> {
     Val(Value<'a>),
-    Add(ASTNodeRef, ASTNodeRef),
-    Sub(ASTNodeRef, ASTNodeRef),
-    Mul(ASTNodeRef, ASTNodeRef),
-    Div(ASTNodeRef, ASTNodeRef),
-    Pow(ASTNodeRef, ASTNodeRef),
-    NthRoot(ASTNodeRef, ASTNodeRef),
-    // Unary operators
-    Neg(ASTNodeRef),
-    Sqrt(ASTNodeRef),
+    Binary(ASTNodeRef, ASTNodeRef, BinaryOp),
+    // Unary operations
+    Unary(ASTNodeRef, UnaryOp),
 
     Parens(Ident<'a>, ASTNodeRef), // Ambiguous case, either multiplication by juxtaposition or a function call
     FunctionCall(Ident<'a>, ThinVec<ASTNodeRef>), // Function with its list of arguments
     Index(ASTNodeRef, ASTNodeRef), // List indexing operations
 
     List(List<'a>), //List
-    ListFilt(ASTNodeRef, ASTNodeRef, Comparison, ASTNodeRef),
+    // Where b is a ref to a Comparison node
+    ListFilt(ASTNodeRef, ASTNodeRef),
 
     Point(ASTNodeRef, ASTNodeRef),
-
-    //Trigonometric functions
-    Sin(ASTNodeRef),
-    Cos(ASTNodeRef),
-    Tan(ASTNodeRef),
-    Csc(ASTNodeRef),
-    Sec(ASTNodeRef),
-    Cot(ASTNodeRef),
-    InvSin(ASTNodeRef),
-    InvCos(ASTNodeRef),
-    InvTan(ASTNodeRef),
-    InvCsc(ASTNodeRef),
-    InvSec(ASTNodeRef),
-    InvCot(ASTNodeRef),
+    Comparison(ASTNodeRef, Comparison, ASTNodeRef),
 
     //List builtins
     Min(ThinVec<ASTNodeRef>),
@@ -136,13 +113,41 @@ pub enum ASTNode<'a> {
     // "number theory functions"
     /// a % b
     Mod(ASTNodeRef, ASTNodeRef),
-    Floor(ASTNodeRef),
-    Ceil(ASTNodeRef),
 
     Piecewise {
         default: ASTNodeRef,
         entries: ThinVec<PiecewiseEntry>,
     },
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnaryOp {
+    Sqrt,
+    Neg,
+    Sin,
+    Cos,
+    Tan,
+    Csc,
+    Sec,
+    Cot,
+    InvSin,
+    InvCos,
+    InvTan,
+    InvCsc,
+    InvSec,
+    InvCot,
+    Floor,
+    Ceil,
+    Gamma,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BinaryOp {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Pow,
+    NthRoot,
+    Mod,
 }
 #[derive(Debug, Clone)]
 pub enum List<'a> {

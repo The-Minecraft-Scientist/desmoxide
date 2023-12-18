@@ -18,7 +18,7 @@ use super::{
 };
 use crate::{
     assert_token_matches,
-    ast::{List, Opcode, PiecewiseEntry, Value},
+    ast::{BinaryOp, List, Opcode, PiecewiseEntry, UnaryOp, Value},
     bad_token,
     lexer::Token,
     util::{multipeek::MultiPeek, LexIter},
@@ -180,12 +180,15 @@ impl<'a> ParseManager<'a> {
 
         let mut lhs = match next.1 {
             //Identifier
-            Token::Ident => ASTNode::Val(next.0.into()).into(),
+            Token::Ident => ASTNode::Val(next.0.into()),
             //Static value
-            Token::IntegerLit(i) => ASTNode::Val(i.into()).into(),
-            Token::FloatLit(f) => ASTNode::Val(f.into()).into(),
+            Token::IntegerLit(i) => ASTNode::Val(i.into()),
+            Token::FloatLit(f) => ASTNode::Val(f.into()),
             //Prefix negation
-            Token::Minus => ASTNode::Neg(self.parse_placed(*Opcode::Neg.prefix_bp()?)?),
+            Token::Minus => ASTNode::Unary(
+                self.parse_placed(*Opcode::Neg.prefix_bp()?)?,
+                super::UnaryOp::Neg,
+            ),
             // TODO: piecewise functions
             Token::LGroup => {
                 if self.lexer.peek_next_res()?.1 == Token::RGroup {
@@ -256,7 +259,7 @@ impl<'a> ParseManager<'a> {
                 assert_token_matches!(self.lexer, Token::LGroup);
                 let denominator = self.parse_placed(0)?;
                 assert_token_matches!(self.lexer, Token::RGroup);
-                ASTNode::Div(numerator, denominator).into()
+                ASTNode::Binary(numerator, denominator, BinaryOp::Div).into()
             }
             Token::Sqrt => {
                 match self.lexer.next_res()? {
@@ -267,13 +270,13 @@ impl<'a> ParseManager<'a> {
                         assert_token_matches!(self.lexer, Token::LGroup);
                         let base = self.parse_placed(0)?;
                         assert_token_matches!(self.lexer, Token::RGroup);
-                        ASTNode::NthRoot(n, base).into()
+                        ASTNode::Binary(n, base, BinaryOp::NthRoot).into()
                     }
                     //handle pure sqrt
                     (_, Token::LGroup) => {
                         let base = self.parse_placed(0)?;
                         assert_token_matches!(self.lexer, Token::RGroup);
-                        ASTNode::NthRoot(self.place(ASTNode::Val(Value::ConstantI64(2))), base)
+                        ASTNode::Unary(base, UnaryOp::Sqrt)
                     }
                     (s, t) => bad_token!(s, t, "in sqrt expression"),
                 }
@@ -310,7 +313,7 @@ impl<'a> ParseManager<'a> {
                 assert_token_matches!(self.lexer, Token::Comma);
                 let arg1 = self.parse_placed(0)?;
                 assert_token_matches!(self.lexer, Token::RParen);
-                ASTNode::new_simple_2arg(t, arg0, arg1)?
+                ASTNode::new_simple_binary(t, arg0, arg1)?
             }
             t if t.should_autojoin_args() => {
                 let arg = self.parse_autojoin_args()?;
@@ -334,7 +337,7 @@ impl<'a> ParseManager<'a> {
                     let exp = self.parse_placed(0)?;
                     assert_token_matches!(self.lexer, Token::RGroup);
 
-                    lhs = ASTNode::Pow(self.place(lhs), exp);
+                    lhs = ASTNode::Binary(self.place(lhs), exp, BinaryOp::Pow);
                     continue;
                 }
                 Token::LBracket => Opcode::Index,
@@ -439,7 +442,7 @@ impl<'a> ParseManager<'a> {
                     (Opcode::Parens, _a) => {
                         let rhs = self.parse_placed(0)?;
                         assert_token_matches!(self.lexer, Token::RParen);
-                        lhs = ASTNode::Mul(self.place(lhs), rhs).into();
+                        lhs = ASTNode::Binary(self.place(lhs), rhs, BinaryOp::Mul).into();
                     }
                     (Opcode::Index, _node) => {
                         let rhs = self.parse_placed(0)?;
@@ -457,13 +460,12 @@ impl<'a> ParseManager<'a> {
                                 assert_token_matches!(self.lexer, Token::RBracket);
                             }
                             t if t.is_comparison() => {
-                                let compcase = self.parse_expr(0)?;
+                                let compcase = self.parse_placed(0)?;
                                 let comp = t.as_comparison()?;
+
                                 lhs = ASTNode::ListFilt(
                                     self.place(lhs),
-                                    rhs,
-                                    comp,
-                                    self.place(compcase),
+                                    self.place(ASTNode::Comparison(rhs, comp, compcase)),
                                 )
                                 .into();
                                 assert_token_matches!(self.lexer, Token::RBracket);
@@ -482,7 +484,7 @@ impl<'a> ParseManager<'a> {
                 let _ = self.lexer.next();
                 let rhs = self.parse_expr(bp.right)?;
 
-                lhs = ASTNode::new_opcode_2arg(op, self.place(lhs), self.place(rhs));
+                lhs = ASTNode::new_simple_binary(a.1, self.place(lhs), self.place(rhs))?;
                 continue;
             }
             break;

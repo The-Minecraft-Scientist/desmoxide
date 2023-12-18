@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use std::collections::BTreeMap;
 
-use crate::ast::{Comparison, CoordinateAccess};
+use crate::ast::{Comparison, CoordinateAccess, UnaryOp};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum IRType {
@@ -82,7 +82,7 @@ pub enum IROp {
     Unary(Id, UnaryOp),
     /// 64-bit floating point constant
     Const(f64),
-    /// load args\[a\] to this reg
+    /// load args\[a] to this reg
     LoadArg(ArgId),
     /// load args\[a]\[i] (if args\[a] is a list of number)
     CoordinateOf(Id, CoordinateAccess),
@@ -126,45 +126,8 @@ pub enum IROp {
 impl IROp {
     pub fn type_of(&self) -> IRType {
         // this match statement should always be exhaustive to prevent new instructions from being made without assigning them a type
-        match self {
-            IROp::BeginBroadcast { .. }
-            | IROp::EndBroadcast { .. }
-            | IROp::EndPiecewise { .. }
-            | IROp::SetBroadcastArg(..)
-            | IROp::InnerPiecewise { .. }
-            | IROp::Ret(_) => IRType::Never,
-            IROp::Comparison { .. } => IRType::Bool,
-            IROp::BeginPiecewise { res, .. } => res.t,
-            IROp::LoadArg(l) => l.0.t,
-            IROp::Vec2(..) => IRType::Vec2,
-            IROp::Vec3(..) => IRType::Vec3,
-            IROp::Add(..)
-            | IROp::Sub(..)
-            | IROp::Mul(..)
-            | IROp::Div(..)
-            | IROp::Pow(..)
-            | IROp::Unary(..)
-            | IROp::Const(_)
-            | IROp::CoordinateOf(..) => IRType::Number,
-        }
+        todo!()
     }
-}
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum UnaryOp {
-    Sqrt,
-    Neg,
-    Sin,
-    Cos,
-    Tan,
-    Csc,
-    Sec,
-    Cot,
-    InvSin,
-    InvCos,
-    InvTan,
-    InvCsc,
-    InvSec,
-    InvCot,
 }
 
 #[derive(Debug, Clone)]
