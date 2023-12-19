@@ -75,6 +75,7 @@ impl<'source> AST<'source> {
                 b
             }};
         }
+
         let n = self.get_node(nid)?;
         if let ASTNode::Val(v) = n {
             builder.add_leaf(&format!("{:?}", v));
@@ -90,21 +91,32 @@ impl<'source> AST<'source> {
             ASTNode::List(l) => match l {
                 List::List(v) => named_branch_list!(name, "", v),
                 List::ListComp(a, info) => {
+                    builder.add_branch("List Comprehension");
                     self.recursive_dbg(builder.clone(), *a);
                     named_branch_list!(name, "", info.vars.iter().map(|a| &a.1))
                 }
-                List::Range(a, b) => named_branch!("name", "", a, b),
+                List::Range(a, b) => named_branch!("Range list", "", a, b),
             },
             ASTNode::ListFilt(l, a) => named_branch!(name, "", l, a),
             ASTNode::Point(a, b) => named_branch!(name, "", a, b),
             ASTNode::ListOp(a, o) => named_branch_list!(name, o.as_ref(), a),
             ASTNode::CoordinateAccess(a, b) => named_branch!(name, b.as_ref(), a),
-            ASTNode::Comparison(a, c, b) => named_branch!(name, c.as_ref(), a, b),
+            ASTNode::Comparison(a, c, ba) => {
+                let mut b = builder.add_branch("Comparison");
+                self.recursive_dbg(builder.clone(), *a);
+                builder.add_leaf(c.as_ref());
+                self.recursive_dbg(builder.clone(), *ba);
+                b
+            }
             ASTNode::Piecewise { default, entries } => {
-                let b = builder.add_branch("piecewise");
+                let b = builder.add_branch("if");
                 for entry in entries {
+                    let mut b1 = builder.add_branch("if");
                     self.recursive_dbg(builder.clone(), entry.comp)?;
+                    let mut b0 = builder.add_branch("then");
                     self.recursive_dbg(builder.clone(), entry.result)?;
+                    b0.release();
+                    b1.release();
                 }
                 b
             }
@@ -127,7 +139,7 @@ impl<'source> Debug for AST<'source> {
         let mut builder = TreeBuilder::new();
         self.recursive_dbg(builder.clone(), self.root.unwrap())
             .unwrap();
-        f.write_str(&builder.as_tree().string())?;
+        f.write_str(&builder.as_tree().string());
         Ok(())
     }
 }
