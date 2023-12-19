@@ -5,10 +5,11 @@ pub mod parser;
 use crate::util::thin_str::ThinStr;
 //Re-export stuff from private scopes (used to keep enum name collisions down)
 pub use ast_impl::*;
-pub use ast_node_impl::*;
 pub use bp::*;
+use strum::AsRefStr;
 
 use std::{
+    fmt::Debug,
     num::{NonZeroU64, NonZeroUsize},
     ops::{Deref, DerefMut},
 };
@@ -17,14 +18,49 @@ use thin_vec::ThinVec;
 #[derive(Debug, Clone, Copy)]
 pub struct ASTNodeRef(NonZeroUsize);
 
+#[derive(Clone, Debug, strum::AsRefStr)]
+//TODO: this is 32 bytes for some reason. It should be 24
+pub enum ASTNode<'a> {
+    Val(Value<'a>),
+    Binary(ASTNodeRef, ASTNodeRef, BinaryOp),
+    // Unary operations
+    Unary(ASTNodeRef, UnaryOp),
+
+    Parens(Ident<'a>, ASTNodeRef), // Ambiguous case, either multiplication by juxtaposition or a function call
+    FunctionCall(Ident<'a>, ThinVec<ASTNodeRef>), // Function with its list of arguments
+    Index(ASTNodeRef, ASTNodeRef), // List indexing operations
+
+    List(List<'a>), //List
+    // Where b is a ref to a Comparison node
+    ListFilt(ASTNodeRef, ASTNodeRef),
+
+    Point(ASTNodeRef, ASTNodeRef),
+
+    //List builtins
+    ListOp(ThinVec<ASTNodeRef>, ListOp),
+    CoordinateAccess(ASTNodeRef, CoordinateAccess),
+    //comparison operator
+    Comparison(ASTNodeRef, Comparison, ASTNodeRef),
+
+    Piecewise {
+        default: ASTNodeRef,
+        entries: ThinVec<PiecewiseEntry>,
+    },
+}
+
 mod ast_impl {
+    use std::fmt::{Debug, Formatter};
+
     use anyhow::{bail, Result};
     use thin_vec::ThinVec;
 
     use crate::lexer::Token;
     use crate::lexer::Token::*;
 
-    use super::{ASTNode as AN, ASTNodeRef, BinaryOp as B, List, Opcode as OP, UnaryOp as U};
+    use super::{
+        parse_manager::AST, ASTNode as AN, ASTNodeRef, BinaryOp as B, List, ListOp, Opcode as OP,
+        UnaryOp as U,
+    };
 
     impl<'a> AN<'a> {
         pub fn new_simple_with_node(token: Token, inner: ASTNodeRef) -> Result<Self> {
@@ -48,13 +84,13 @@ mod ast_impl {
                 t => bail!("token {:?} is not a simple builtin", t),
             })
         }
-        pub fn new_autojoin_fn(token: Token, arg: ThinVec<ASTNodeRef>) -> Result<Self> {
+        pub fn new_list_fn(token: Token, arg: ThinVec<ASTNodeRef>) -> Result<Self> {
             Ok(match token {
-                Min => AN::Min(arg),
-                Max => AN::Max(arg),
-                Count => AN::Count(arg),
-                Total => AN::Total(arg),
-                Join => AN::Join(arg),
+                Min => AN::ListOp(arg, ListOp::Min),
+                Max => AN::ListOp(arg, ListOp::Max),
+                Count => AN::ListOp(arg, ListOp::Count),
+                Total => AN::ListOp(arg, ListOp::Total),
+                Join => AN::ListOp(arg, ListOp::Join),
                 t => bail!("token {:?} does not autojoin its arguments", t),
             })
         }
@@ -71,55 +107,7 @@ mod ast_impl {
         }
     }
 }
-
-#[derive(Clone, Debug)]
-//TODO: this is 32 bytes for some reason. It should be 24
-pub enum ASTNode<'a> {
-    Val(Value<'a>),
-    Binary(ASTNodeRef, ASTNodeRef, BinaryOp),
-    // Unary operations
-    Unary(ASTNodeRef, UnaryOp),
-
-    Parens(Ident<'a>, ASTNodeRef), // Ambiguous case, either multiplication by juxtaposition or a function call
-    FunctionCall(Ident<'a>, ThinVec<ASTNodeRef>), // Function with its list of arguments
-    Index(ASTNodeRef, ASTNodeRef), // List indexing operations
-
-    List(List<'a>), //List
-    // Where b is a ref to a Comparison node
-    ListFilt(ASTNodeRef, ASTNodeRef),
-
-    Point(ASTNodeRef, ASTNodeRef),
-    Comparison(ASTNodeRef, Comparison, ASTNodeRef),
-
-    //List builtins
-    Min(ThinVec<ASTNodeRef>),
-    Max(ThinVec<ASTNodeRef>),
-    Count(ThinVec<ASTNodeRef>),
-    Total(ThinVec<ASTNodeRef>),
-    Join(ThinVec<ASTNodeRef>),
-    Length(ThinVec<ASTNodeRef>),
-
-    // 2 argument sort is optional
-    Sort(ASTNodeRef, Option<ASTNodeRef>),
-    // Seed argument is optional
-    Shuffle(ASTNodeRef, Option<ASTNodeRef>),
-    Unique(ASTNodeRef),
-    // Random can be called with 0, 1, or 2 arguments
-    Random(Option<(ASTNodeRef, Option<ASTNodeRef>)>),
-    CoordinateAccess(ASTNodeRef, CoordinateAccess),
-    //comparison operator
-    Comp(ASTNodeRef, Comparison, ASTNodeRef),
-
-    // "number theory functions"
-    /// a % b
-    Mod(ASTNodeRef, ASTNodeRef),
-
-    Piecewise {
-        default: ASTNodeRef,
-        entries: ThinVec<PiecewiseEntry>,
-    },
-}
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::AsRefStr)]
 pub enum UnaryOp {
     Sqrt,
     Neg,
@@ -139,7 +127,20 @@ pub enum UnaryOp {
     Ceil,
     Gamma,
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::AsRefStr)]
+pub enum ListOp {
+    Min,
+    Max,
+    Count,
+    Total,
+    Join,
+    Length,
+    Unique,
+    Sort,
+    Shuffle,
+    Random,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::AsRefStr)]
 pub enum BinaryOp {
     Add,
     Sub,
@@ -156,61 +157,45 @@ pub enum List<'a> {
     List(ThinVec<ASTNodeRef>),              // List defined by a vector of AST nodes
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, AsRefStr)]
 pub enum CoordinateAccess {
     DotAccessX,
     DotAccessY,
     DotAccessZ,
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, strum::AsRefStr)]
 pub enum Comparison {
     Eq,
-    Ge,
-    Gt,
-    Le,
-    Lt,
+    GreaterEq,
+    Greater,
+    LessEq,
+    Less,
 }
-mod ast_node_impl {
 
-    use super::ASTNode;
-    use super::ASTNode::*;
-
-    impl<'a> ASTNode<'a> {
-        pub fn can_be_list(&self) -> bool {
-            matches!(
-                self,
-                List(_)
-                    | Val(super::Value::Ident(_))
-                    | Min(_)
-                    | Max(_)
-                    | Count(_)
-                    | Total(_)
-                    | Join(_)
-                    | Length(_)
-            )
-        }
-        pub fn can_be_point(&self) -> bool {
-            matches!(self, Point(_, _) | Val(super::Value::Ident(_)))
-        }
-    }
-}
 #[derive(Debug, Clone)]
 pub struct ListCompInfo<'a> {
-    vars: ThinVec<(Ident<'a>, ASTNodeRef)>,
+    pub vars: ThinVec<(Ident<'a>, ASTNodeRef)>,
 }
 #[derive(Debug, Clone)]
 pub struct PiecewiseEntry {
-    lhs: ASTNodeRef,
-    comp: Comparison,
-    rhs: ASTNodeRef,
+    comp: ASTNodeRef,
     result: ASTNodeRef,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum Value<'a> {
     Ident(Ident<'a>),
     ConstantI64(i64),
     ConstantF64(f64),
+}
+impl<'a> Debug for Value<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Value::Ident(a) => a.0.fmt(f),
+            Value::ConstantF64(a) => a.fmt(f),
+            Value::ConstantI64(a) => a.fmt(f),
+        }
+    }
 }
 #[derive(Clone, Debug)]
 pub struct Ident<'a>(ThinStr<'a>);

@@ -83,17 +83,17 @@ impl<'a> Parser<'a> {
         } else {
             //Default case, equation
             let mut pm = ParseManager::new(lexer);
-            let lhs = pm.parse_placed(0)?;
+            pm.parse()?;
 
             let (ast, mut lex) = pm.split();
             lexer = lex;
             let next = lexer.next_res();
             if let Ok(n) = next {
                 let s = match n.1 {
-                    Token::Gt => EquationType::InEq(Comparison::Gt),
-                    Token::Ge => EquationType::InEq(Comparison::Ge),
-                    Token::Lt => EquationType::InEq(Comparison::Lt),
-                    Token::Le => EquationType::InEq(Comparison::Le),
+                    Token::Gt => EquationType::InEq(Comparison::Greater),
+                    Token::Ge => EquationType::InEq(Comparison::GreaterEq),
+                    Token::Lt => EquationType::InEq(Comparison::Less),
+                    Token::Le => EquationType::InEq(Comparison::LessEq),
                     Token::Eq => EquationType::Implicit,
                     t => {
                         bad_token!(n.0, t, "determining expression type")
@@ -141,7 +141,7 @@ impl<'a> Parser<'a> {
         let mut rhs = None;
         if let Some(_) = lex.peek_next() {
             let mut pm = ParseManager::new(lex);
-            pm.parse_expr(0)?;
+            pm.parse()?;
             rhs = Some(pm.ast);
         }
         {

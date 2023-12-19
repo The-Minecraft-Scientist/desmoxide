@@ -1,10 +1,16 @@
 use std::{
     cell::RefCell,
     collections::{hash_map::Entry, HashMap},
+    fmt::{Debug, Formatter},
     num::NonZeroUsize,
     ops::{Deref, DerefMut, Index},
+    slice::SliceIndex,
 };
 
+use debug_tree::{
+    add_branch, add_branch_to, add_leaf, defer_write, scoped_branch::ScopedBranch, AsTree,
+    TreeBuilder,
+};
 use logos::{Lexer, Logos};
 use thin_vec::{thin_vec, ThinVec};
 
@@ -18,30 +24,111 @@ use super::{
 };
 use crate::{
     assert_token_matches,
-    ast::{BinaryOp, List, Opcode, PiecewiseEntry, UnaryOp, Value},
+    ast::{BinaryOp, List, ListOp, Opcode, PiecewiseEntry, UnaryOp, Value},
     bad_token,
     lexer::Token,
     util::{multipeek::MultiPeek, LexIter},
 };
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct AST<'source> {
-    store: Vec<ASTNode<'source>>,
+    pub store: Vec<ASTNode<'source>>,
+    pub root: Option<ASTNodeRef>,
 }
 impl<'source> AST<'source> {
     pub fn new() -> Self {
         Self {
             store: Vec::with_capacity(10),
+            root: None,
         }
     }
     pub fn place(&mut self, node: ASTNode<'source>) -> ASTNodeRef {
         self.push(node);
         unsafe { ASTNodeRef(NonZeroUsize::new_unchecked(self.len())) }
     }
+    pub fn get_node(&self, idx: ASTNodeRef) -> Result<&ASTNode<'source>> {
+        self.get(idx.0.get() as usize - 1)
+            .context("invalid AST node reference")
+    }
+    pub fn get_node_mut(&mut self, idx: ASTNodeRef) -> Result<&mut ASTNode<'source>> {
+        self.get_mut(idx.0.get() as usize - 1)
+            .context("invalid AST node reference")
+    }
+    pub fn place_root(&mut self, root: ASTNode<'source>) {
+        self.root = Some(self.place(root));
+    }
+    pub fn recursive_dbg(&self, builder: TreeBuilder, nid: ASTNodeRef) -> Result<()> {
+        macro_rules! named_branch {
+            ($bname:expr, $bctx:expr,$($child:expr),+) => {
+                {let b = builder.add_branch(&format!("{}: {}", $bname, $bctx));
+                $(
+                self.recursive_dbg(builder.clone(), *$child)?;
+                )*
+                b}
+            };
+        }
+        macro_rules! named_branch_list {
+            ($bname:expr, $bctx:expr,$children:expr) => {{
+                let b = builder.add_branch(&format!("{}: {}", $bname, $bctx));
+                for child in $children {
+                    self.recursive_dbg(builder.clone(), *child)?;
+                }
+                b
+            }};
+        }
+        let n = self.get_node(nid)?;
+        if let ASTNode::Val(v) = n {
+            builder.add_leaf(&format!("{:?}", v));
+            return Ok(());
+        }
+        let name = n.as_ref();
+        let s = match n {
+            ASTNode::Binary(a, b, c) => named_branch!(name, c.as_ref(), a, b),
+            ASTNode::Unary(a, c) => named_branch!(name, c.as_ref(), a),
+            ASTNode::Parens(i, a) => named_branch!(name, i.0.as_str(), a),
+            ASTNode::FunctionCall(i, r) => named_branch_list!(name, i.0.as_str(), r),
+            ASTNode::Index(r, v) => named_branch!(name, "", r, v),
+            ASTNode::List(l) => match l {
+                List::List(v) => named_branch_list!(name, "", v),
+                List::ListComp(a, info) => {
+                    self.recursive_dbg(builder.clone(), *a);
+                    named_branch_list!(name, "", info.vars.iter().map(|a| &a.1))
+                }
+                List::Range(a, b) => named_branch!("name", "", a, b),
+            },
+            ASTNode::ListFilt(l, a) => named_branch!(name, "", l, a),
+            ASTNode::Point(a, b) => named_branch!(name, "", a, b),
+            ASTNode::ListOp(a, o) => named_branch_list!(name, o.as_ref(), a),
+            ASTNode::CoordinateAccess(a, b) => named_branch!(name, b.as_ref(), a),
+            ASTNode::Comparison(a, c, b) => named_branch!(name, c.as_ref(), a, b),
+            ASTNode::Piecewise { default, entries } => {
+                let b = builder.add_branch("piecewise");
+                for entry in entries {
+                    self.recursive_dbg(builder.clone(), entry.comp)?;
+                    self.recursive_dbg(builder.clone(), entry.result)?;
+                }
+                b
+            }
+            t => {
+                dbg!(&t);
+                panic!()
+            }
+        };
+        Ok(())
+    }
 }
 impl<'source> Index<ASTNodeRef> for AST<'source> {
     type Output = ASTNode<'source>;
     fn index(&self, index: ASTNodeRef) -> &Self::Output {
         &self.store[index.0.get() as usize - 1]
+    }
+}
+impl<'source> Debug for AST<'source> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut builder = TreeBuilder::new();
+        self.recursive_dbg(builder.clone(), self.root.unwrap())
+            .unwrap();
+        f.write_str(&builder.as_tree().string())?;
+        Ok(())
     }
 }
 impl<'a> Deref for AST<'a> {
@@ -65,6 +152,11 @@ impl<'a> ParseManager<'a> {
             lexer: lex,
             ast: AST::new(),
         }
+    }
+    pub fn parse(&mut self) -> Result<()> {
+        let root = self.parse_expr(0)?;
+        self.ast.place_root(root);
+        Ok(())
     }
     pub fn split(self) -> (AST<'a>, MultiPeek<LexIter<'a, Token>>) {
         (self.ast, self.lexer)
@@ -116,16 +208,16 @@ impl<'a> ParseManager<'a> {
             }
         })
     }
-    ///Special case handling for min, max, count, total and join
-    fn parse_autojoin_args(&mut self) -> Result<ThinVec<ASTNodeRef>> {
+    fn parse_function_call(&mut self) -> Result<ThinVec<ASTNodeRef>> {
         assert_token_matches!(self.lexer, Token::LParen);
-        self.parse_fn_args(ThinVec::with_capacity(5))
+        self.parse_fn_call(ThinVec::with_capacity(5))
     }
-
-    fn parse_fn_args(&mut self, vars: ThinVec<ASTNodeRef>) -> Result<ThinVec<ASTNodeRef>> {
-        self.parse_args(vars, Token::RParen)
+    //Sepcial case for when suffix call has already introduced an initial argument
+    fn parse_fn_call(&mut self, vars: ThinVec<ASTNodeRef>) -> Result<ThinVec<ASTNodeRef>> {
+        self.parse_values(vars, Token::RParen)
     }
-    fn parse_args(
+    //generic function to parse a comma-seperated list of AST nodes concluded by the token "tok"
+    fn parse_values(
         &mut self,
         mut vars: ThinVec<ASTNodeRef>,
         tok: Token,
@@ -205,10 +297,13 @@ impl<'a> ParseManager<'a> {
                     let right = self.parse_expr(0)?;
                     assert_token_matches!(self.lexer, Token::Colon);
                     let result = self.parse_expr(0)?;
+                    let n = ASTNode::Comparison(
+                        self.place(left),
+                        n.1.as_comparison()?,
+                        self.place(right),
+                    );
                     v.push(PiecewiseEntry {
-                        lhs: self.place(left),
-                        comp: n.1.as_comparison()?,
-                        rhs: self.place(right),
+                        comp: self.place(n),
                         result: self.place(result),
                     });
                     loop {
@@ -230,10 +325,13 @@ impl<'a> ParseManager<'a> {
                                             } else {
                                                 self.parse_expr(0)?
                                             };
+                                        let comp = ASTNode::Comparison(
+                                            s,
+                                            t.as_comparison()?,
+                                            self.place(right),
+                                        );
                                         v.push(PiecewiseEntry {
-                                            lhs: s,
-                                            comp: t.as_comparison()?,
-                                            rhs: self.place(right),
+                                            comp: self.place(comp),
                                             result: self.place(result),
                                         });
                                     }
@@ -285,23 +383,23 @@ impl<'a> ParseManager<'a> {
             Token::Random => {
                 assert_token_matches!(self.lexer, Token::LParen);
                 if self.lexer.peek_next_res()?.1 == Token::RParen {
-                    ASTNode::Random(None).into()
+                    ASTNode::ListOp(thin_vec![], ListOp::Random).into()
                 } else {
-                    let arg0 = self.parse_placed(0)?;
-                    let mut arg1 = None;
+                    let mut v = ThinVec::with_capacity(2);
+                    v.push(self.parse_placed(0)?);
                     match self.lexer.peek_next_res()? {
                         (_, Token::Comma) => {
                             self.lexer.catch_up();
-                            arg1 = Some(self.parse_placed(0)?);
+                            v.push(self.parse_placed(0)?);
                         }
                         (_, Token::RParen) => {}
                         t => bad_token!(t.0, t.1, "parsing random() function args"),
                     };
                     assert_token_matches!(self.lexer, Token::RParen | Token::Comma);
-                    ASTNode::Random(Some((arg0, arg1))).into()
+                    ASTNode::ListOp(v, ListOp::Random).into()
                 }
             }
-            t if t.is_simple() => {
+            t if t.is_simple_unary() => {
                 assert_token_matches!(self.lexer, Token::LParen);
                 let inner = self.parse_placed(0)?;
                 assert_token_matches!(self.lexer, Token::RParen);
@@ -315,9 +413,9 @@ impl<'a> ParseManager<'a> {
                 assert_token_matches!(self.lexer, Token::RParen);
                 ASTNode::new_simple_binary(t.binary_builtin().unwrap(), arg0, arg1)?
             }
-            t if t.should_autojoin_args() => {
-                let arg = self.parse_autojoin_args()?;
-                ASTNode::new_autojoin_fn(t, arg)?
+            t if t.has_autojoin_semantics() => {
+                let arg = self.parse_function_call()?;
+                ASTNode::new_list_fn(t, arg)?
             }
             t => bad_token!(next.0, t, "getting lhs"),
         };
@@ -347,9 +445,6 @@ impl<'a> ParseManager<'a> {
                     let id = self.lexer.next_res()?;
                     if let Token::Ident = id.1 {
                         self.lexer.discard()?;
-                        if !lhs.can_be_point() {
-                            bail!("cannot get coordinate of a number")
-                        }
                         let a = match id.0 {
                             "x" => DotAccessX,
                             "y" => DotAccessY,
@@ -361,14 +456,14 @@ impl<'a> ParseManager<'a> {
                         lhs = ASTNode::CoordinateAccess(self.place(lhs), a).into();
                         continue;
                     }
-                    if !id.1.suffix_call_allowed() {
+                    if !id.1.has_dot_call_semantics() {
                         bail!("cannot call builtin {:?} as a suffix", id.1)
                     }
                     // Handle list function calls in suffix position (e.g. [1,2,3].sort()   )
-                    if id.1.should_autojoin_args() {
+                    if id.1.has_autojoin_semantics() {
                         let mut vars = ThinVec::with_capacity(10);
                         vars.push(self.place(lhs));
-                        lhs = ASTNode::new_autojoin_fn(id.1, self.parse_fn_args(vars)?)?;
+                        lhs = ASTNode::new_list_fn(id.1, self.parse_fn_call(vars)?)?;
                         continue;
                     }
 
@@ -431,7 +526,7 @@ impl<'a> ParseManager<'a> {
                             Token::Comma => {
                                 let mut v = ThinVec::with_capacity(10);
                                 v.push(rhs);
-                                let v = self.parse_fn_args(v)?;
+                                let v = self.parse_fn_call(v)?;
                                 lhs = ASTNode::FunctionCall(s.clone(), v).into();
                             }
                             t => {
@@ -451,7 +546,7 @@ impl<'a> ParseManager<'a> {
                             Token::Comma => {
                                 let mut v = ThinVec::with_capacity(10);
                                 v.push(rhs);
-                                let args = self.parse_args(v, Token::RBracket)?;
+                                let args = self.parse_values(v, Token::RBracket)?;
                                 lhs = ASTNode::Index(
                                     self.place(lhs),
                                     self.place(ASTNode::List(List::List(args))),

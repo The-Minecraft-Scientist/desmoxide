@@ -1,7 +1,7 @@
 pub use categories::*;
 /// Lexer token
 #[derive(logos::Logos, Debug, PartialEq, Clone, Copy)]
-#[logos(skip r"[ \t\n\f]+")]
+#[logos(skip r"[ \t\n\f]+|\\+left|\\+right")]
 pub enum Token {
     // LITERALS --------------------------------------------
     /// Floating point literal
@@ -9,8 +9,7 @@ pub enum Token {
     FloatLit(f64),
     ///Integer literal
 
-    #[regex(r"\d+", |lex| {lex.slice().parse().ok()})]
-    #[token(r"\left\{\right\}", callback = |_| Some(1))]
+    #[regex(r"-?\d+", |lex| {lex.slice().parse().ok()})]
     IntegerLit(i64),
 
     // IDENTIFIERS -----------------------------------------
@@ -137,8 +136,10 @@ pub enum Token {
     #[token(r"\operatorname{ceil}")]
     Ceil,
 
-    #[token(r"\left", logos::skip)]
-    #[token(r"\right", logos::skip)]
+    #[token(r"\left", callback = logos::skip, priority = 10000)]
+    #[token(r"\\left", callback = logos::skip, priority = 10000)]
+    #[token(r"\right", callback = logos::skip, priority = 10000)]
+    #[token(r"\\right", callback = logos::skip, priority = 10000)]
     Invalid,
 }
 mod categories {
@@ -149,16 +150,13 @@ mod categories {
     use super::Token;
     use super::Token::*;
     impl Token {
-        pub fn is_value(&self) -> bool {
-            matches!(self, FloatLit(_) | IntegerLit(_) | Ident)
-        }
         pub fn ends_parse(&self) -> bool {
             matches!(
                 self,
                 RGroup | For | RParen | Eq | Gt | Ge | Le | Lt | Colon | RBracket | Comma
             )
         }
-        pub fn is_simple(&self) -> bool {
+        pub fn is_simple_unary(&self) -> bool {
             matches!(
                 self,
                 Sin | Cos
@@ -182,11 +180,11 @@ mod categories {
                 _ => None,
             }
         }
-        pub fn suffix_call_allowed(&self) -> bool {
+        pub fn has_dot_call_semantics(&self) -> bool {
             //TODO: this should be exhaustive
             matches!(self, Min | Max | Count | Total | Join | Length)
         }
-        pub fn should_autojoin_args(&self) -> bool {
+        pub fn has_autojoin_semantics(&self) -> bool {
             //TODO: this is probably not exhaustive either
             matches!(self, Min | Max | Count | Total | Join)
         }
@@ -202,10 +200,10 @@ mod categories {
         }
         pub fn as_comparison(&self) -> Result<Comparison> {
             Ok(match self {
-                Ge => Comparison::Ge,
-                Gt => Comparison::Gt,
-                Le => Comparison::Le,
-                Lt => Comparison::Lt,
+                Ge => Comparison::GreaterEq,
+                Gt => Comparison::Greater,
+                Le => Comparison::LessEq,
+                Lt => Comparison::Less,
                 Eq => Comparison::Eq,
                 t => bail!("token {:?} is not a comparison", t),
             })
