@@ -9,7 +9,7 @@ use std::{
 
 use debug_tree::{
     add_branch, add_branch_to, add_leaf, defer_write, scoped_branch::ScopedBranch, AsTree,
-    TreeBuilder,
+    TreeBuilder, TreeConfig, TreeSymbols,
 };
 use logos::{Lexer, Logos};
 use thin_vec::{thin_vec, ThinVec};
@@ -121,8 +121,7 @@ impl<'source> AST<'source> {
                 b
             }
             t => {
-                dbg!(&t);
-                panic!()
+                bail!("incorrect AST node")
             }
         };
         Ok(())
@@ -137,6 +136,7 @@ impl<'source> Index<ASTNodeRef> for AST<'source> {
 impl<'source> Debug for AST<'source> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut builder = TreeBuilder::new();
+        builder.set_config_override(TreeConfig::new().symbols(TreeSymbols::with_rounded()));
         self.recursive_dbg(&mut builder, self.root.unwrap())
             .unwrap();
         f.write_str(&builder.as_tree().string());

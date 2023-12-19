@@ -6,7 +6,7 @@ use std::{
 use logos::{Lexer, Logos};
 use thin_vec::{thin_vec, ThinVec};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Context, Error, Result};
 
 use super::{
     expression::{EquationType, ExpressionMeta, ExpressionType},
@@ -111,7 +111,7 @@ impl<'a> Parser<'a> {
         self.meta.borrow_mut().insert(idx, meta);
         Ok(lexer)
     }
-    pub fn update_all(&self) -> Result<()> {
+    pub fn bench_test(&self) -> Result<Vec<Error>> {
         let start = std::time::Instant::now();
         let mut ctr = 0;
         let mut problems = Vec::with_capacity(50);
@@ -132,8 +132,7 @@ impl<'a> Parser<'a> {
             self.storage.len(),
             end.checked_duration_since(start).unwrap().as_micros()
         );
-        println!("problematic expressions: \n {:?}", problems);
-        Ok(())
+        Ok(problems)
     }
     pub fn parse_expr(&self, idx: u32) -> Result<()> {
         let mut lex = self.line_lexer(idx)?;
