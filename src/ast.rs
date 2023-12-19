@@ -1,4 +1,4 @@
-#![allow(unused)]
+//#![allow(unused)]
 pub mod expression;
 pub mod parse_manager;
 pub mod parser;
@@ -8,11 +8,7 @@ pub use ast_impl::*;
 pub use bp::*;
 use strum::AsRefStr;
 
-use std::{
-    fmt::Debug,
-    num::{NonZeroU64, NonZeroUsize},
-    ops::{Deref, DerefMut},
-};
+use std::{fmt::Debug, num::NonZeroUsize, ops::Deref};
 use thin_vec::ThinVec;
 
 #[derive(Debug, Clone, Copy)]
@@ -49,7 +45,6 @@ pub enum ASTNode<'a> {
 }
 
 mod ast_impl {
-    use std::fmt::{Debug, Formatter};
 
     use anyhow::{bail, Result};
     use thin_vec::ThinVec;
@@ -57,10 +52,7 @@ mod ast_impl {
     use crate::lexer::Token;
     use crate::lexer::Token::*;
 
-    use super::{
-        parse_manager::AST, ASTNode as AN, ASTNodeRef, BinaryOp as B, List, ListOp, Opcode as OP,
-        UnaryOp as U,
-    };
+    use super::{ASTNode as AN, ASTNodeRef, BinaryOp as B, ListOp, Opcode as OP, UnaryOp as U};
 
     impl<'a> AN<'a> {
         pub fn new_simple_with_node(token: Token, inner: ASTNodeRef) -> Result<Self> {

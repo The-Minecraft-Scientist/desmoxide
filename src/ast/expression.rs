@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 use thin_vec::ThinVec;
 
-use super::{parse_manager::AST, ASTNode, ASTNodeRef, Comparison, Ident, Opcode};
+use super::{parse_manager::AST, Comparison, Ident};
 
 #[derive(Debug, Clone)]
 pub struct ExpressionMeta<'a> {

@@ -3,21 +3,17 @@ use std::{
     collections::{hash_map::Entry, HashMap},
 };
 
-use logos::{Lexer, Logos};
-use thin_vec::{thin_vec, ThinVec};
+use logos::Logos;
+use thin_vec::ThinVec;
 
-use anyhow::{bail, Context, Error, Result};
+use anyhow::{Context, Error, Result};
 
 use super::{
     expression::{EquationType, ExpressionMeta, ExpressionType},
     parse_manager::ParseManager,
-    ASTNode, ASTNodeRef, Comparison,
-    CoordinateAccess::*,
-    Ident, ListCompInfo,
+    Comparison, Ident,
 };
 use crate::{
-    assert_token_matches,
-    ast::{List, Opcode, PiecewiseEntry, Value},
     bad_token,
     lexer::Token,
     util::{multipeek::MultiPeek, LexIter},
@@ -85,7 +81,7 @@ impl<'a> Parser<'a> {
             let mut pm = ParseManager::new(lexer);
             pm.parse()?;
 
-            let (ast, mut lex) = pm.split();
+            let (ast, lex) = pm.split();
             lexer = lex;
             let next = lexer.next_res();
             if let Ok(n) = next {
@@ -135,8 +131,7 @@ impl<'a> Parser<'a> {
         Ok(problems)
     }
     pub fn parse_expr(&self, idx: u32) -> Result<()> {
-        let mut lex = self.line_lexer(idx)?;
-        lex = self.scan_expression_type(idx)?;
+        let mut lex = self.scan_expression_type(idx)?;
         let mut rhs = None;
         if let Some(_) = lex.peek_next() {
             let mut pm = ParseManager::new(lex);

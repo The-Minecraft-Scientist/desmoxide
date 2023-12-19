@@ -1,27 +1,15 @@
 use std::{
-    cell::RefCell,
-    collections::{hash_map::Entry, HashMap},
-    fmt::{Debug, Formatter},
+    fmt::Debug,
     num::NonZeroUsize,
     ops::{Deref, DerefMut, Index},
-    slice::SliceIndex,
 };
 
-use debug_tree::{
-    add_branch, add_branch_to, add_leaf, defer_write, scoped_branch::ScopedBranch, AsTree,
-    TreeBuilder, TreeConfig, TreeSymbols,
-};
-use logos::{Lexer, Logos};
+use debug_tree::{AsTree, TreeBuilder, TreeConfig, TreeSymbols};
 use thin_vec::{thin_vec, ThinVec};
 
 use anyhow::{bail, Context, Result};
 
-use super::{
-    expression::{EquationType, ExpressionMeta, ExpressionType},
-    ASTNode, ASTNodeRef,
-    CoordinateAccess::*,
-    Ident, ListCompInfo,
-};
+use super::{ASTNode, ASTNodeRef, CoordinateAccess::*, Ident, ListCompInfo};
 use crate::{
     assert_token_matches,
     ast::{BinaryOp, List, ListOp, Opcode, PiecewiseEntry, UnaryOp, Value},
@@ -82,7 +70,7 @@ impl<'source> AST<'source> {
             return Ok(());
         }
         let name = n.as_ref();
-        let s = match n {
+        let _s = match n {
             ASTNode::Binary(a, b, c) => named_branch!(name, c.as_ref(), a, b),
             ASTNode::Unary(a, c) => named_branch!(name, c.as_ref(), a),
             ASTNode::Parens(i, a) => named_branch!(name, i.0.as_str(), a),
@@ -92,7 +80,7 @@ impl<'source> AST<'source> {
                 List::List(v) => named_branch_list!(name, "", v),
                 List::ListComp(a, info) => {
                     builder.add_branch("List Comprehension");
-                    self.recursive_dbg(builder, *a);
+                    self.recursive_dbg(builder, *a)?;
                     named_branch_list!(name, "", info.vars.iter().map(|a| &a.1))
                 }
                 List::Range(a, b) => named_branch!("Range list", "", a, b),
@@ -102,13 +90,16 @@ impl<'source> AST<'source> {
             ASTNode::ListOp(a, o) => named_branch_list!(name, o.as_ref(), a),
             ASTNode::CoordinateAccess(a, b) => named_branch!(name, b.as_ref(), a),
             ASTNode::Comparison(a, c, ba) => {
-                let mut b = builder.add_branch("Comparison");
-                self.recursive_dbg(builder, *a);
+                let b = builder.add_branch("Comparison");
+                self.recursive_dbg(builder, *a)?;
                 builder.add_leaf(c.as_ref());
-                self.recursive_dbg(builder, *ba);
+                self.recursive_dbg(builder, *ba)?;
                 b
             }
-            ASTNode::Piecewise { default, entries } => {
+            ASTNode::Piecewise {
+                default: _,
+                entries,
+            } => {
                 let b = builder.add_branch("if");
                 for entry in entries {
                     let mut b1 = builder.add_branch("if");
@@ -120,7 +111,7 @@ impl<'source> AST<'source> {
                 }
                 b
             }
-            t => {
+            _t => {
                 bail!("incorrect AST node")
             }
         };
@@ -139,7 +130,7 @@ impl<'source> Debug for AST<'source> {
         builder.set_config_override(TreeConfig::new().symbols(TreeSymbols::with_rounded()));
         self.recursive_dbg(&mut builder, self.root.unwrap())
             .unwrap();
-        f.write_str(&builder.as_tree().string());
+        f.write_str(&builder.as_tree().string())?;
         Ok(())
     }
 }
@@ -520,7 +511,6 @@ impl<'a> ParseManager<'a> {
                     self.lexer.push(("*", Token::Mul));
                     Opcode::Mul
                 }
-                t => bad_token!(a.0, t, "getting opcode"),
             };
             if let Ok(bp) = op.postfix_bp() {
                 if *bp < min_binding_power {
