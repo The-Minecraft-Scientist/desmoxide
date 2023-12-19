@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::ast::{parser::Parser, Ident};
+use crate::ast::{Ident};
 
 use super::ir::Id;
 
