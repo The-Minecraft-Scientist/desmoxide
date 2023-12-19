@@ -56,12 +56,12 @@ impl<'source> AST<'source> {
     pub fn place_root(&mut self, root: ASTNode<'source>) {
         self.root = Some(self.place(root));
     }
-    pub fn recursive_dbg(&self, builder: TreeBuilder, nid: ASTNodeRef) -> Result<()> {
+    pub fn recursive_dbg(&self, builder: &mut TreeBuilder, nid: ASTNodeRef) -> Result<()> {
         macro_rules! named_branch {
             ($bname:expr, $bctx:expr,$($child:expr),+) => {
                 {let b = builder.add_branch(&format!("{}: {}", $bname, $bctx));
                 $(
-                self.recursive_dbg(builder.clone(), *$child)?;
+                self.recursive_dbg(builder, *$child)?;
                 )*
                 b}
             };
@@ -70,7 +70,7 @@ impl<'source> AST<'source> {
             ($bname:expr, $bctx:expr,$children:expr) => {{
                 let b = builder.add_branch(&format!("{}: {}", $bname, $bctx));
                 for child in $children {
-                    self.recursive_dbg(builder.clone(), *child)?;
+                    self.recursive_dbg(builder, *child)?;
                 }
                 b
             }};
@@ -92,7 +92,7 @@ impl<'source> AST<'source> {
                 List::List(v) => named_branch_list!(name, "", v),
                 List::ListComp(a, info) => {
                     builder.add_branch("List Comprehension");
-                    self.recursive_dbg(builder.clone(), *a);
+                    self.recursive_dbg(builder, *a);
                     named_branch_list!(name, "", info.vars.iter().map(|a| &a.1))
                 }
                 List::Range(a, b) => named_branch!("Range list", "", a, b),
@@ -103,18 +103,18 @@ impl<'source> AST<'source> {
             ASTNode::CoordinateAccess(a, b) => named_branch!(name, b.as_ref(), a),
             ASTNode::Comparison(a, c, ba) => {
                 let mut b = builder.add_branch("Comparison");
-                self.recursive_dbg(builder.clone(), *a);
+                self.recursive_dbg(builder, *a);
                 builder.add_leaf(c.as_ref());
-                self.recursive_dbg(builder.clone(), *ba);
+                self.recursive_dbg(builder, *ba);
                 b
             }
             ASTNode::Piecewise { default, entries } => {
                 let b = builder.add_branch("if");
                 for entry in entries {
                     let mut b1 = builder.add_branch("if");
-                    self.recursive_dbg(builder.clone(), entry.comp)?;
+                    self.recursive_dbg(builder, entry.comp)?;
                     let mut b0 = builder.add_branch("then");
-                    self.recursive_dbg(builder.clone(), entry.result)?;
+                    self.recursive_dbg(builder, entry.result)?;
                     b0.release();
                     b1.release();
                 }
@@ -137,7 +137,7 @@ impl<'source> Index<ASTNodeRef> for AST<'source> {
 impl<'source> Debug for AST<'source> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut builder = TreeBuilder::new();
-        self.recursive_dbg(builder.clone(), self.root.unwrap())
+        self.recursive_dbg(&mut builder, self.root.unwrap())
             .unwrap();
         f.write_str(&builder.as_tree().string());
         Ok(())
