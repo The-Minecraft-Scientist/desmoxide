@@ -7,7 +7,6 @@ use super::{parse_manager::AST, ASTNode, ASTNodeRef, Comparison, Ident, Opcode};
 pub struct ExpressionMeta<'a> {
     pub cached_rhs_ast: Option<AST<'a>>,
     pub cached_lhs_ast: Option<AST<'a>>,
-    pub ast: Vec<ASTNode<'a>>,
     pub expression_type: Option<ExpressionType<'a>>,
 }
 impl<'a> ExpressionMeta<'a> {
@@ -27,7 +26,6 @@ impl<'a> ExpressionMeta<'a> {
         cached_lhs_ast: None,
         cached_rhs_ast: None,
         expression_type: None,
-        ast: Vec::new(),
     };
 }
 
