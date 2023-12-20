@@ -1,5 +1,3 @@
-
-
 use logos::{Lexer, Logos, Source};
 
 pub mod macros;
@@ -25,3 +23,8 @@ where
         Some((self.lexer.slice(), n))
     }
 }
+pub trait Discard: Sized {
+    /// Discards a value inline by consuming it
+    fn discard(self) {}
+}
+impl<T> Discard for T {}

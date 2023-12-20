@@ -1,15 +1,8 @@
-use std::{
-    fmt::Debug,
-    num::NonZeroUsize,
-    ops::{Deref, DerefMut, Index},
-};
-
-use debug_tree::{AsTree, TreeBuilder, TreeConfig, TreeSymbols};
 use thin_vec::{thin_vec, ThinVec};
 
 use anyhow::{bail, Context, Result};
 
-use super::{ASTNode, ASTNodeRef, CoordinateAccess::*, Ident, ListCompInfo};
+use super::{ASTNode, ASTNodeId, CoordinateAccess::*, Ident, ListCompInfo, AST};
 use crate::{
     assert_token_matches,
     ast::{BinaryOp, List, ListOp, Opcode, PiecewiseEntry, UnaryOp, Value},
@@ -17,134 +10,7 @@ use crate::{
     lexer::Token,
     util::{multipeek::MultiPeek, LexIter},
 };
-#[derive(Clone)]
-pub struct AST<'source> {
-    pub store: Vec<ASTNode<'source>>,
-    pub root: Option<ASTNodeRef>,
-}
-impl<'source> AST<'source> {
-    pub fn new() -> Self {
-        Self {
-            store: Vec::with_capacity(10),
-            root: None,
-        }
-    }
-    pub fn place(&mut self, node: ASTNode<'source>) -> ASTNodeRef {
-        self.push(node);
-        unsafe { ASTNodeRef(NonZeroUsize::new_unchecked(self.len())) }
-    }
-    pub fn get_node(&self, idx: ASTNodeRef) -> Result<&ASTNode<'source>> {
-        self.get(idx.0.get() as usize - 1)
-            .context("invalid AST node reference")
-    }
-    pub fn get_node_mut(&mut self, idx: ASTNodeRef) -> Result<&mut ASTNode<'source>> {
-        self.get_mut(idx.0.get() as usize - 1)
-            .context("invalid AST node reference")
-    }
-    pub fn place_root(&mut self, root: ASTNode<'source>) {
-        self.root = Some(self.place(root));
-    }
-    pub fn recursive_dbg(&self, builder: &mut TreeBuilder, nid: ASTNodeRef) -> Result<()> {
-        macro_rules! named_branch {
-            ($bname:expr, $bctx:expr,$($child:expr),+) => {
-                {let b = builder.add_branch(&format!("{}: {}", $bname, $bctx));
-                $(
-                self.recursive_dbg(builder, *$child)?;
-                )*
-                b}
-            };
-        }
-        macro_rules! named_branch_list {
-            ($bname:expr, $bctx:expr,$children:expr) => {{
-                let b = builder.add_branch(&format!("{}: {}", $bname, $bctx));
-                for child in $children {
-                    self.recursive_dbg(builder, *child)?;
-                }
-                b
-            }};
-        }
 
-        let n = self.get_node(nid)?;
-        if let ASTNode::Val(v) = n {
-            builder.add_leaf(&format!("{:?}", v));
-            return Ok(());
-        }
-        let name = n.as_ref();
-        let _s = match n {
-            ASTNode::Binary(a, b, c) => named_branch!(name, c.as_ref(), a, b),
-            ASTNode::Unary(a, c) => named_branch!(name, c.as_ref(), a),
-            ASTNode::Parens(i, a) => named_branch!(name, i.0.as_str(), a),
-            ASTNode::FunctionCall(i, r) => named_branch_list!(name, i.0.as_str(), r),
-            ASTNode::Index(r, v) => named_branch!(name, "", r, v),
-            ASTNode::List(l) => match l {
-                List::List(v) => named_branch_list!(name, "", v),
-                List::ListComp(a, info) => {
-                    builder.add_branch("List Comprehension");
-                    self.recursive_dbg(builder, *a)?;
-                    named_branch_list!(name, "", info.vars.iter().map(|a| &a.1))
-                }
-                List::Range(a, b) => named_branch!("Range list", "", a, b),
-            },
-            ASTNode::ListFilt(l, a) => named_branch!(name, "", l, a),
-            ASTNode::Point(a, b) => named_branch!(name, "", a, b),
-            ASTNode::ListOp(a, o) => named_branch_list!(name, o.as_ref(), a),
-            ASTNode::CoordinateAccess(a, b) => named_branch!(name, b.as_ref(), a),
-            ASTNode::Comparison(a, c, ba) => {
-                let b = builder.add_branch("Comparison");
-                self.recursive_dbg(builder, *a)?;
-                builder.add_leaf(c.as_ref());
-                self.recursive_dbg(builder, *ba)?;
-                b
-            }
-            ASTNode::Piecewise {
-                default: _,
-                entries,
-            } => {
-                let b = builder.add_branch("if");
-                for entry in entries {
-                    let mut b1 = builder.add_branch("if");
-                    self.recursive_dbg(builder, entry.comp)?;
-                    let mut b0 = builder.add_branch("then");
-                    self.recursive_dbg(builder, entry.result)?;
-                    b0.release();
-                    b1.release();
-                }
-                b
-            }
-            _t => {
-                bail!("incorrect AST node")
-            }
-        };
-        Ok(())
-    }
-}
-impl<'source> Index<ASTNodeRef> for AST<'source> {
-    type Output = ASTNode<'source>;
-    fn index(&self, index: ASTNodeRef) -> &Self::Output {
-        &self.store[index.0.get() as usize - 1]
-    }
-}
-impl<'source> Debug for AST<'source> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut builder = TreeBuilder::new();
-        builder.set_config_override(TreeConfig::new().symbols(TreeSymbols::with_rounded()));
-        self.recursive_dbg(&mut builder, self.root.unwrap())
-            .unwrap();
-        f.write_str(&builder.as_tree().string())?;
-        Ok(())
-    }
-}
-impl<'a> Deref for AST<'a> {
-    type Target = Vec<ASTNode<'a>>;
-    fn deref(&self) -> &Self::Target {
-        &self.store
-    }
-}
-impl<'a> DerefMut for AST<'a> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.store
-    }
-}
 pub struct ParseManager<'source> {
     pub lexer: MultiPeek<LexIter<'source, Token>>,
     pub ast: AST<'source>,
@@ -165,7 +31,7 @@ impl<'a> ParseManager<'a> {
         (self.ast, self.lexer)
     }
 
-    fn place(&mut self, node: ASTNode<'a>) -> ASTNodeRef {
+    fn place(&mut self, node: ASTNode<'a>) -> ASTNodeId {
         self.ast.place(node)
     }
     fn parse_list_body(&mut self) -> Result<List<'a>> {
@@ -211,20 +77,20 @@ impl<'a> ParseManager<'a> {
             }
         })
     }
-    fn parse_function_call(&mut self) -> Result<ThinVec<ASTNodeRef>> {
+    fn parse_function_call(&mut self) -> Result<ThinVec<ASTNodeId>> {
         assert_token_matches!(self.lexer, Token::LParen);
         self.parse_fn_call(ThinVec::with_capacity(5))
     }
     //Sepcial case for when suffix call has already introduced an initial argument
-    fn parse_fn_call(&mut self, vars: ThinVec<ASTNodeRef>) -> Result<ThinVec<ASTNodeRef>> {
+    fn parse_fn_call(&mut self, vars: ThinVec<ASTNodeId>) -> Result<ThinVec<ASTNodeId>> {
         self.parse_values(vars, Token::RParen)
     }
     //generic function to parse a comma-seperated list of AST nodes concluded by the token "tok"
     fn parse_values(
         &mut self,
-        mut vars: ThinVec<ASTNodeRef>,
+        mut vars: ThinVec<ASTNodeId>,
         tok: Token,
-    ) -> Result<ThinVec<ASTNodeRef>> {
+    ) -> Result<ThinVec<ASTNodeId>> {
         let next_token = self.lexer.peek_next().context("unexpected EOF")?;
         //Empty list
         if next_token.1 == tok {
@@ -265,7 +131,7 @@ impl<'a> ParseManager<'a> {
             }
         })
     }
-    pub fn parse_placed(&mut self, min_bp: u8) -> Result<ASTNodeRef> {
+    pub fn parse_placed(&mut self, min_bp: u8) -> Result<ASTNodeId> {
         let s = self.parse_expr(min_bp)?;
         Ok(self.place(s))
     }
@@ -483,7 +349,7 @@ impl<'a> ParseManager<'a> {
                 Token::For => {
                     self.lexer.discard()?;
                     //LHS is the expression to be run
-                    let mut vars: ThinVec<(Ident<'a>, ASTNodeRef)> = ThinVec::with_capacity(2);
+                    let mut vars: ThinVec<(Ident<'a>, ASTNodeId)> = ThinVec::with_capacity(2);
                     loop {
                         let (id, Token::Ident) =
                             self.lexer.peek_next().context("unexpected EOF")?

@@ -1,20 +1,19 @@
 use anyhow::{Context, Result};
 
-
-use crate::ast::{parse_manager::AST, ASTNode, ASTNodeRef};
+use crate::ast::{ASTNode, ASTNodeId, AST};
 
 impl<'source> ASTNode<'source> {}
 pub struct ASTVisitor<'borrow, 'source, F, Extra = ()> {
-    to_visit: Vec<ASTNodeRef>,
+    to_visit: Vec<ASTNodeId>,
     ast: &'borrow AST<'source>,
     func: F,
     extra: Extra,
 }
 impl<'borrow, 'source, F, Extra> ASTVisitor<'borrow, 'source, F, Extra>
 where
-    for<'a> F: Fn(&'a mut Vec<ASTNodeRef>, &'a mut Extra, &'a ASTNode<'source>),
+    for<'a> F: Fn(&'a mut Vec<ASTNodeId>, &'a mut Extra, &'a ASTNode<'source>),
 {
-    pub fn new(start_at: ASTNodeRef, ast: &'borrow AST<'source>, func: F, extra: Extra) -> Self {
+    pub fn new(start_at: ASTNodeId, ast: &'borrow AST<'source>, func: F, extra: Extra) -> Self {
         Self {
             ast,
             func,

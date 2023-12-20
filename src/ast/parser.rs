@@ -3,6 +3,7 @@ use std::{
     collections::{hash_map::Entry, HashMap},
 };
 
+use egg::Language;
 use logos::Logos;
 use thin_vec::ThinVec;
 
@@ -11,23 +12,25 @@ use anyhow::{Context, Error, Result};
 use super::{
     expression::{EquationType, ExpressionMeta, ExpressionType},
     parse_manager::ParseManager,
-    Comparison, Ident,
+    Comparison, Ident, AST,
 };
 use crate::{
     bad_token,
     lexer::Token,
-    util::{multipeek::MultiPeek, LexIter},
+    util::{multipeek::MultiPeek, Discard, LexIter},
 };
 #[derive(Debug)]
-pub struct Parser<'a> {
+pub struct Expressions<'a> {
     pub storage: &'a HashMap<u32, &'a str>,
-    pub meta: RefCell<HashMap<u32, ExpressionMeta<'a>>>,
+    pub meta: HashMap<u32, ExpressionMeta<'a>>,
+    ident_lookup: HashMap<&'a str, u32>,
 }
-impl<'a> Parser<'a> {
+impl<'a> Expressions<'a> {
     pub fn new(lines: &'a HashMap<u32, &'a str>) -> Self {
         Self {
-            meta: RefCell::new(HashMap::with_capacity(lines.len())),
+            meta: HashMap::with_capacity(lines.len()),
             storage: lines,
+            ident_lookup: HashMap::with_capacity(lines.len()),
         }
     }
     pub fn line_lexer(&self, line: u32) -> Result<MultiPeek<LexIter<'a, Token>>> {
@@ -38,7 +41,16 @@ impl<'a> Parser<'a> {
                 .context(format!("line with ID {} not found!", line))?,
         ))))
     }
-    pub fn scan_expression_type(&self, idx: u32) -> Result<MultiPeek<LexIter<'a, Token>>> {
+    pub fn ident_ast(&self, i: &'a str) -> Result<&AST<'a>> {
+        let idx = self.ident_lookup.get(i).context("could not find Ident")?;
+        Ok(&self
+            .meta
+            .get(idx)
+            .context("")?
+            .cached_lhs_ast
+            .context("Ident does not have valid LHS AST")?)
+    }
+    pub fn scan_expression_type(&mut self, idx: u32) -> Result<MultiPeek<LexIter<'a, Token>>> {
         let mut lexer = self.line_lexer(idx)?;
         let first = *lexer.multipeek_res()?;
         let t = match first.1 {
@@ -67,6 +79,7 @@ impl<'a> Parser<'a> {
                 //[Ident]=[stuff]
                 Token::Eq => {
                     lexer.catch_up();
+                    self.ident_lookup.insert(first.0, idx);
                     Some(ExpressionType::Var(first.0.into()))
                 }
                 _ => None,
@@ -104,7 +117,7 @@ impl<'a> Parser<'a> {
                 });
             };
         }
-        self.meta.borrow_mut().insert(idx, meta);
+        self.meta.insert(idx, meta);
         Ok(lexer)
     }
     pub fn bench_test(&self) -> Result<Vec<Error>> {
@@ -130,7 +143,7 @@ impl<'a> Parser<'a> {
         );
         Ok(problems)
     }
-    pub fn parse_expr(&self, idx: u32) -> Result<()> {
+    pub fn parse_expr(&mut self, idx: u32) -> Result<()> {
         let mut lex = self.scan_expression_type(idx)?;
         let mut rhs = None;
         if let Some(_) = lex.peek_next() {
@@ -139,7 +152,7 @@ impl<'a> Parser<'a> {
             rhs = Some(pm.ast);
         }
         {
-            match self.meta.borrow_mut().entry(idx) {
+            match self.meta.entry(idx) {
                 Entry::Occupied(mut v) => v.get_mut().cached_rhs_ast = rhs,
                 Entry::Vacant(a) => {
                     let mut v = ExpressionMeta::INVALID;

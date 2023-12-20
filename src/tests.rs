@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    ast::parser::Parser,
+    ast::parser::Expressions,
     interop::{Expression, Graph},
 };
 
@@ -24,7 +24,7 @@ pub fn parse_graph_exprs(g: &str) {
             m.insert(*id, s.as_str());
         }
     }
-    let p = Parser::new(&m);
+    let p = Expressions::new(&m);
     let v = p.bench_test().unwrap();
     if v.len() > 0 {
         println!("test failed to parse the following expressions: {:?}", v);
