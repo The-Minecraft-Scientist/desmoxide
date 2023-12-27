@@ -44,7 +44,7 @@ impl IRType {
 #[derive(Debug, Clone, Copy)]
 pub struct Id {
     idx: u32,
-    t: IRType,
+    pub t: IRType,
 }
 
 impl Id {
@@ -94,31 +94,31 @@ pub struct ArgId(Id);
 /// and special broadcasting instructions are used to iterate over complex types component-wise
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum IROp {
-    /// a + b
-    Add(Id, Id),
-    /// a - b
-    Sub(Id, Id),
-    /// a / b
-    Div(Id, Id),
-    /// a * b
-    Mul(Id, Id),
-    /// a^b
-    Pow(Id, Id),
-
+    Binary(Id, Id, BinaryOp),
     Unary(Id, UnaryOp),
     /// 64-bit floating point constant
     Const(f64),
+    /// 64-bit integer constant
+    IConst(i64),
     /// load args\[a] to this reg
     LoadArg(ArgId),
     /// load args\[a]\[i] (if args\[a] is a list of number)
     CoordinateOf(Id, CoordinateAccess),
-    /// 2d vector. This is of `Opaque` type
+    /// 2d vector.
     Vec2(Id, Id),
-    /// 3d vector. This is of `Opaque` type
+    /// 3d vector.
     Vec3(Id, Id, Id),
+    /// Instantiate an empty list of number with length a
+    NumberList(Id),
+    /// Instantiate an empty list of Vec2 with length a
+    Vec2List(Id),
+    /// Instantiate an empty list of Vec3 with length a
+    Vec3List(Id),
+    /// length of list at a
+    ListLength(Id),
     /// Begins a broadcast loop that executes its body over indices 0->end_index inclusive, and stores its output in b
     BeginBroadcast {
-        end_index: u32,
+        end_index: Id,
         write_to: Id,
     },
     /// Only allowed directly following SetBroadcast or BeginBroadcast instructions. Sets the broadcast argument slot at b to the item a
@@ -152,7 +152,27 @@ pub enum IROp {
 impl IROp {
     pub fn type_of(&self) -> IRType {
         // this match statement should always be exhaustive to prevent new instructions from being made without assigning them a type
-        todo!()
+        match self {
+            IROp::Binary(_, _, _)
+            | IROp::Unary(_, _)
+            | IROp::Const(_)
+            | IROp::IConst(_)
+            | IROp::CoordinateOf(_, _) => IRType::Number,
+            IROp::LoadArg(a) => a.0.t,
+            IROp::Vec2(_, _) => IRType::Vec2,
+            IROp::Vec3(_, _, _) => IRType::Vec3,
+            IROp::NumberList(_) => IRType::NumberList,
+            IROp::Vec2List(_) => IRType::Vec2List,
+            IROp::Vec3List(_) => IRType::Vec3List,
+            IROp::BeginBroadcast { .. } => IRType::Never,
+            IROp::SetBroadcastArg(_, _) => IRType::Never,
+            IROp::EndBroadcast { .. } => IRType::Never,
+            IROp::Comparison { .. } => IRType::Bool,
+            IROp::BeginPiecewise { res, .. } => res.t,
+            // it is invalid to refer to a non- BeginPiecewise instruction
+            IROp::InnerPiecewise { .. } | IROp::EndPiecewise { .. } => IRType::Never,
+            IROp::Ret(i) => i.t,
+        }
     }
 }
 
@@ -173,6 +193,30 @@ impl IRInstructionSeq {
         self.backing.insert(id, op);
         id
     }
+    pub fn coordinates_of2d(&mut self, point: Id) -> (Id, Id) {
+        (
+            self.place(IROp::CoordinateOf(point, CoordinateAccess::DotAccessX)),
+            self.place(IROp::CoordinateOf(point, CoordinateAccess::DotAccessY)),
+        )
+    }
+    pub fn coordinates_of3d(&mut self, point: Id) -> (Id, Id, Id) {
+        (
+            self.place(IROp::CoordinateOf(point, CoordinateAccess::DotAccessX)),
+            self.place(IROp::CoordinateOf(point, CoordinateAccess::DotAccessY)),
+            self.place(IROp::CoordinateOf(point, CoordinateAccess::DotAccessZ)),
+        )
+    }
+    pub fn place_block(&mut self, ops: &[IROp]) -> Option<Id> {
+        if ops.len() == 0 {
+            None
+        } else {
+            let first = self.place(ops[0]);
+            for i in &ops[1..] {
+                self.push(*i);
+            }
+            Some(first)
+        }
+    }
     pub fn get(&self, id: &Id) -> Result<&IROp> {
         self.backing.get(id).context("Could not get IR opcode")
     }
@@ -183,3 +227,8 @@ impl IRInstructionSeq {
             .context("called latest on empty InstructionSeq")
     }
 }
+pub struct BroadcastBuilder<'a> {
+    seq: &'a mut IRInstructionSeq,
+    args: Vec<BroadcastArg>,
+}
+impl<'a> BroadcastBuilder<'a> {}
