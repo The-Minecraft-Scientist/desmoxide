@@ -157,7 +157,8 @@ impl IROp {
             | IROp::Unary(_, _)
             | IROp::Const(_)
             | IROp::IConst(_)
-            | IROp::CoordinateOf(_, _) => IRType::Number,
+            | IROp::CoordinateOf(_, _)
+            | IROp::ListLength(_) => IRType::Number,
             IROp::LoadArg(a) => a.0.t,
             IROp::Vec2(_, _) => IRType::Vec2,
             IROp::Vec3(_, _, _) => IRType::Vec3,
