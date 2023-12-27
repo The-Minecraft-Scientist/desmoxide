@@ -147,6 +147,8 @@ pub enum BinaryOp {
     Pow,
     NthRoot,
     Mod,
+    Min,
+    Max,
 }
 #[derive(Debug, Clone)]
 pub enum List<'a> {

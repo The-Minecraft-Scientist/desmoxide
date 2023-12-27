@@ -1,8 +1,8 @@
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use std::collections::BTreeMap;
 
 use crate::{
-    ast::{BinaryOp, Comparison, CoordinateAccess, UnaryOp},
+    ast::{BinaryOp, Comparison, CoordinateAccess, Ident, UnaryOp},
     permute,
 };
 
@@ -37,6 +37,14 @@ impl IRType {
             Self::Vec3 => Some(Self::Vec3),
             _ => None,
         }
+    }
+    pub fn list_of(&self, len: Id) -> Result<IROp> {
+        Ok(match self {
+            IRType::Number => IROp::NumberList(len),
+            IRType::Vec2 => IROp::Vec2List(len),
+            IRType::Vec3 => IROp::Vec3List(len),
+            t => bail!("cannot create a list of {:?}", t),
+        })
     }
 }
 
@@ -75,9 +83,9 @@ impl Ord for Id {
 
 /// Identifies an argument to the current broadcast scope
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum BroadcastArg {
-    Point(u8),
-    Number(u8),
+pub struct BroadcastArg {
+    pub t: IRType,
+    pub id: u8,
 }
 // typed indentifier that identifies an item of type and index in args
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -123,9 +131,10 @@ pub enum IROp {
     },
     /// Only allowed directly following SetBroadcast or BeginBroadcast instructions. Sets the broadcast argument slot at b to the item a
     SetBroadcastArg(Id, BroadcastArg),
+    LoadBroadcastArg(BroadcastArg),
     EndBroadcast {
         /// ID of the corresponding BeginBroadcast register
-        begin: u32,
+        begin: Id,
         /// ID of the value to push to the output list
         ret: Id,
     },
@@ -153,13 +162,24 @@ impl IROp {
     pub fn type_of(&self) -> IRType {
         // this match statement should always be exhaustive to prevent new instructions from being made without assigning them a type
         match self {
+            //Number type
             IROp::Binary(_, _, _)
             | IROp::Unary(_, _)
             | IROp::Const(_)
             | IROp::IConst(_)
             | IROp::CoordinateOf(_, _)
             | IROp::ListLength(_) => IRType::Number,
-            IROp::LoadArg(a) => a.0.t,
+            //Passthrough type
+            IROp::LoadArg(ArgId(Id { t, .. }))
+            | IROp::LoadBroadcastArg(BroadcastArg { t, .. })
+            | IROp::BeginPiecewise {
+                res: Id { t, .. }, ..
+            }
+            | IROp::BeginBroadcast {
+                write_to: Id { t, .. },
+                ..
+            } => *t,
+            //Opaque declarations
             IROp::Vec2(_, _) => IRType::Vec2,
             IROp::Vec3(_, _, _) => IRType::Vec3,
             IROp::NumberList(_) => IRType::NumberList,
@@ -169,7 +189,6 @@ impl IROp {
             IROp::SetBroadcastArg(_, _) => IRType::Never,
             IROp::EndBroadcast { .. } => IRType::Never,
             IROp::Comparison { .. } => IRType::Bool,
-            IROp::BeginPiecewise { res, .. } => res.t,
             // it is invalid to refer to a non- BeginPiecewise instruction
             IROp::InnerPiecewise { .. } | IROp::EndPiecewise { .. } => IRType::Never,
             IROp::Ret(i) => i.t,

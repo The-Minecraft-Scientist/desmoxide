@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::Debug, hash::Hash};
 
-use super::ir::{IRInstructionSeq, IROp, IRType, Id};
+use super::ir::{BroadcastArg, IRInstructionSeq, IROp, IRType, Id};
 use crate::{
     ast::{
         parser::Expressions, ASTNode, ASTNodeId, BinaryOp, CoordinateAccess, Ident, List, Value,
@@ -40,16 +40,38 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
                 let arg1 = self.rec_build_ir(*arg1, expr, frame)?;
                 match (arg0.t.downcast_list(), arg1.t.downcast_list()) {
                     // List [op] Value
-                    (Some(t), None) => {
-                        let 
-                        self.seq.push(IROp::BeginBroadcast { end_index: (), write_to: () })
+                    (Some(t), None) => self.build_broadcast_binary(node, arg0, t, arg1, op)?,
+                    // Value [op] List
+                    (None, Some(t)) => self.build_broadcast_binary(node, arg1, t, arg0, op)?,
+                    // List [op] List
+                    (Some(t0), Some(t1)) => {
+                        if t1 != t0 {
+                            compiler_error!(node, "cannot perform operation {:?} on a list of {:?} and a list of {:?}", op, t0, t1)
+                        }
+                        let t = t0;
+                        //Generate broadcast header
+                        let len0 = self.seq.place(IROp::ListLength(arg0));
+                        let len1 = self.seq.place(IROp::ListLength(arg1));
+                        let len = self.seq.place(IROp::Binary(len0, len1, BinaryOp::Min));
+                        let list = self.seq.place(t.list_of(len)?);
+                        let begin = self.seq.place(IROp::BeginBroadcast {
+                            end_index: len,
+                            write_to: list,
+                        });
+                        let arg0_bcd = BroadcastArg { t, id: 0 };
+                        let arg1_bcd = BroadcastArg { t, id: 1 };
+                        self.seq.push(IROp::SetBroadcastArg(arg0, arg0_bcd));
+                        self.seq.push(IROp::SetBroadcastArg(arg1, arg1_bcd));
+                        //Generate broadcast body
+                        let arg0_inner = self.seq.place(IROp::LoadBroadcastArg(arg0_bcd));
+                        let arg1_inner = self.seq.place(IROp::LoadBroadcastArg(arg1_bcd));
+                        let ret = self.build_simple_binary_fn(node, arg0_inner, arg1_inner, *op)?;
+                        self.seq.push(IROp::EndBroadcast { begin, ret });
+                        begin
                     }
                     // Value [op] Value
-                    (None, None) => {
-                        self.build_simple_binary_fn(node, arg0, arg1, *op)?
-                    }
+                    (None, None) => self.build_simple_binary_fn(node, arg0, arg1, *op)?,
                 }
-
             }
             ASTNode::Unary(v, op) => {
                 let t = self.rec_build_ir(*v, expr, frame)?;
@@ -163,6 +185,35 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
                 )
             }
         })
+    }
+    fn build_broadcast_binary(
+        &mut self,
+        node: ASTNodeId,
+        list_arg: Id,
+        list_arg_t: IRType,
+        value_arg: Id,
+        op: &BinaryOp,
+    ) -> Result<Id> {
+        let arg0 = list_arg;
+        let t = list_arg_t;
+        let arg1 = value_arg;
+        //Generate broadcast header
+        let len = self.seq.place(IROp::ListLength(arg0));
+        let list = self.seq.place(t.list_of(len)?);
+        let begin = self.seq.place(IROp::BeginBroadcast {
+            end_index: len,
+            write_to: list,
+        });
+        let arg0_bcd = BroadcastArg { t, id: 0 };
+        let arg1_bcd = BroadcastArg { t: arg1.t, id: 1 };
+        self.seq.push(IROp::SetBroadcastArg(arg0, arg0_bcd));
+        self.seq.push(IROp::SetBroadcastArg(arg1, arg1_bcd));
+        //Generate broadcast body
+        let arg0_inner = self.seq.place(IROp::LoadBroadcastArg(arg0_bcd));
+        let arg1_inner = self.seq.place(IROp::LoadBroadcastArg(arg1_bcd));
+        let ret = self.build_simple_binary_fn(node, arg0_inner, arg1_inner, *op)?;
+        self.seq.push(IROp::EndBroadcast { begin, ret });
+        Ok(begin)
     }
 }
 
