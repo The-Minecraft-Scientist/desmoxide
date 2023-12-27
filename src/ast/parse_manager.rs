@@ -135,6 +135,7 @@ impl<'a> ParseManager<'a> {
         let s = self.parse_expr(min_bp)?;
         Ok(self.place(s))
     }
+    //TODO: Sum/Product support, Derivative/integral support (in AST)
     pub fn parse_expr(&mut self, min_binding_power: u8) -> Result<ASTNode<'a>> {
         //get LHS token
         let next = self.lexer.next_res()?;

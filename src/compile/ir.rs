@@ -90,7 +90,7 @@ pub struct BroadcastArg {
 // typed indentifier that identifies an item of type and index in args
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ArgId(Id);
-
+//TODO: investigate using this representation in egg/egglog
 /// ### Desmoxide IR format
 /// This is mostly equivalent to the TAC-based IR format used by desmos (see https://github.com/DesModder/DesModder/blob/main/parsing/IR.ts).
 /// #### types

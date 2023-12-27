@@ -1,4 +1,5 @@
 pub use categories::*;
+//TODO add Infinity, Sum, Product, Integral tokens
 /// Lexer token
 #[derive(logos::Logos, Debug, PartialEq, Clone, Copy)]
 #[logos(skip r"[ \t\n\f]+|\\+left|\\+right")]

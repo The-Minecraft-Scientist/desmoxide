@@ -74,6 +74,7 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
                 }
             }
             ASTNode::Unary(v, op) => {
+                //TODO: come up with a cleaner way to deal with broadcast codegen
                 let t = self.rec_build_ir(*v, expr, frame)?;
                 if t.t != IRType::Number {
                     compiler_error!(v, "cannot call unary operation {:?} on a {:?}", op, t)
