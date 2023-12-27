@@ -339,6 +339,7 @@ impl<'a> ParseManager<'a> {
                     todo!("Not all dot functions yet implemented")
                 }
                 Token::Range => {
+                    //FIXME correctly handle degenerate case in [1...]
                     self.lexer.discard()?;
                     //Immediately return
                     return Ok(
