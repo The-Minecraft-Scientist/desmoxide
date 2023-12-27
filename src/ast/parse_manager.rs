@@ -426,7 +426,7 @@ impl<'a> ParseManager<'a> {
                                 let compcase = self.parse_placed(0)?;
                                 let comp = t.as_comparison()?;
 
-                                lhs = ASTNode::ListFilt(
+                                lhs = ASTNode::Index(
                                     self.place(lhs),
                                     self.place(ASTNode::Comparison(rhs, comp, compcase)),
                                 )

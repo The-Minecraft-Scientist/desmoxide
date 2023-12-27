@@ -1,7 +1,10 @@
 use anyhow::{Context, Result};
 use std::collections::BTreeMap;
 
-use crate::ast::{Comparison, CoordinateAccess, UnaryOp};
+use crate::{
+    ast::{BinaryOp, Comparison, CoordinateAccess, UnaryOp},
+    permute,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum IRType {
@@ -11,7 +14,30 @@ pub enum IRType {
     Never,
     Bool,
     NumberList,
-    PointList,
+    Vec2List,
+    Vec3List,
+}
+impl IRType {
+    // Is this type a valid input or output for an IRChunk
+    pub fn is_value_type(&self) -> bool {
+        matches!(
+            self,
+            Self::Number
+                | Self::Vec2
+                | Self::Vec3
+                | Self::NumberList
+                | Self::Vec2List
+                | Self::Vec3List
+        )
+    }
+    pub fn downcast_list(&self) -> Option<Self> {
+        match self {
+            Self::NumberList => Some(Self::Number),
+            Self::Vec2 => Some(Self::Vec2),
+            Self::Vec3 => Some(Self::Vec3),
+            _ => None,
+        }
+    }
 }
 
 /// Identifies a numeric argument to the relevant IRChunk by index in the argument list

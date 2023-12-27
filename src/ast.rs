@@ -35,8 +35,6 @@ pub enum ASTNode<'a> {
     Index(ASTNodeId, ASTNodeId),  // List indexing operations
 
     List(List<'a>), //List
-    // Where b is a ref to a Comparison node
-    ListFilt(ASTNodeId, ASTNodeId),
 
     Point(ASTNodeId, ASTNodeId),
 
@@ -199,6 +197,11 @@ impl<'a> Debug for Value<'a> {
 }
 #[derive(Clone, Debug)]
 pub struct Ident<'a>(ThinStr<'a>);
+impl<'a> Ident<'a> {
+    pub fn as_str(&self) -> &'a str {
+        self.0.as_str()
+    }
+}
 impl<'a> Deref for Ident<'a> {
     type Target = str;
     fn deref(&self) -> &Self::Target {
@@ -308,7 +311,6 @@ impl<'source> AST<'source> {
                 }
                 List::Range(a, b) => named_branch!("Range list", "", a, b),
             },
-            ASTNode::ListFilt(l, a) => named_branch!(name, "", l, a),
             ASTNode::Point(a, b) => named_branch!(name, "", a, b),
             ASTNode::ListOp(a, o) => named_branch_list!(name, o.as_ref(), a),
             ASTNode::CoordinateAccess(a, b) => named_branch!(name, b.as_ref(), a),

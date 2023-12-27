@@ -22,3 +22,15 @@ macro_rules! assert_token_matches {
         }
     }};
 }
+#[macro_export]
+macro_rules! compiler_error {
+    ($nid:expr, $($msg:tt)+) => {
+        anyhow::bail!("Compile error at {:?}:{}", $nid, format!($($msg)+))
+    };
+}
+#[macro_export]
+macro_rules! permute {
+    ($lhs:pat, $rhs:pat, $($other:pat),*) => {
+        ($lhs, $rhs, $($other)*) | ($rhs, $lhs, $($other)*)
+    };
+}

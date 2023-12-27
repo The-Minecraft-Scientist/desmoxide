@@ -1,9 +1,5 @@
-use std::{
-    cell::RefCell,
-    collections::{hash_map::Entry, HashMap},
-};
+use std::collections::{hash_map::Entry, HashMap};
 
-use egg::Language;
 use logos::Logos;
 use thin_vec::ThinVec;
 
@@ -17,20 +13,22 @@ use super::{
 use crate::{
     bad_token,
     lexer::Token,
-    util::{multipeek::MultiPeek, Discard, LexIter},
+    util::{multipeek::MultiPeek, LexIter},
 };
 #[derive(Debug)]
 pub struct Expressions<'a> {
     pub storage: &'a HashMap<u32, &'a str>,
     pub meta: HashMap<u32, ExpressionMeta<'a>>,
     ident_lookup: HashMap<&'a str, u32>,
+    fn_lookup: HashMap<&'a str, u32>,
 }
 impl<'a> Expressions<'a> {
     pub fn new(lines: &'a HashMap<u32, &'a str>) -> Self {
         Self {
             meta: HashMap::with_capacity(lines.len()),
             storage: lines,
-            ident_lookup: HashMap::with_capacity(lines.len()),
+            ident_lookup: HashMap::with_capacity(lines.len() / 2),
+            fn_lookup: HashMap::with_capacity(lines.len() / 2),
         }
     }
     pub fn line_lexer(&self, line: u32) -> Result<MultiPeek<LexIter<'a, Token>>> {
@@ -41,13 +39,14 @@ impl<'a> Expressions<'a> {
                 .context(format!("line with ID {} not found!", line))?,
         ))))
     }
-    pub fn ident_ast(&self, i: &'a str) -> Result<&AST<'a>> {
+    pub fn ident_ast(&self, i: &str) -> Result<&AST<'a>> {
         let idx = self.ident_lookup.get(i).context("could not find Ident")?;
-        Ok(&self
+        Ok(self
             .meta
             .get(idx)
-            .context("")?
+            .context("could not get expression")?
             .cached_lhs_ast
+            .as_ref()
             .context("Ident does not have valid LHS AST")?)
     }
     pub fn scan_expression_type(&mut self, idx: u32) -> Result<MultiPeek<LexIter<'a, Token>>> {
@@ -120,7 +119,7 @@ impl<'a> Expressions<'a> {
         self.meta.insert(idx, meta);
         Ok(lexer)
     }
-    pub fn bench_test(&self) -> Result<Vec<Error>> {
+    pub fn bench_test(&mut self) -> Result<Vec<Error>> {
         let start = std::time::Instant::now();
         let mut ctr = 0;
         let mut problems = Vec::with_capacity(50);
