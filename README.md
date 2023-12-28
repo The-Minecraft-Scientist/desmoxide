@@ -8,4 +8,4 @@ desmos, but its incredibly fast
  * Optimize IR with Equality Saturation and the `egg` crate
 ### current features
  * mostly feature-complete parser and AST structure for Desmos expressions (see [here](https://github.com/The-Minecraft-Scientist/desmoxide/blob/master/src/ast/parse_manager.rs))
- * First iteration of intermediate representation format implemented (see [here](https://github.com/The-Minecraft-Scientist/desmoxide/blob/master/src/compile/ir/mod.rs))
+ * First iteration of intermediate representation format implemented (see [here](https://github.com/The-Minecraft-Scientist/desmoxide/blob/master/src/compile/ir.rs))
