@@ -126,8 +126,8 @@ pub enum IROp {
     ListLength(Id),
     /// Begins a broadcast loop that executes its body over indices 0->end_index inclusive, and stores its output in b
     BeginBroadcast {
+        inner_type: IRType,
         end_index: Id,
-        write_to: Id,
     },
     /// Only allowed directly following SetBroadcast or BeginBroadcast instructions. Sets the broadcast argument slot at b to the item a
     SetBroadcastArg(Id, BroadcastArg),
@@ -175,10 +175,7 @@ impl IROp {
             | IROp::BeginPiecewise {
                 res: Id { t, .. }, ..
             }
-            | IROp::BeginBroadcast {
-                write_to: Id { t, .. },
-                ..
-            } => *t,
+            | IROp::BeginBroadcast { inner_type: t, .. } => *t,
             //Opaque declarations
             IROp::Vec2(_, _) => IRType::Vec2,
             IROp::Vec3(_, _, _) => IRType::Vec3,

@@ -3,8 +3,8 @@ use std::{collections::HashMap, fmt::Debug, hash::Hash};
 use super::ir::{BroadcastArg, IRInstructionSeq, IROp, IRType, Id};
 use crate::{
     ast::{
-        parser::Expressions, ASTNode, ASTNodeId, BinaryOp, CoordinateAccess, Ident, List, Value,
-        AST,
+        parser::Expressions, ASTNode, ASTNodeId, BinaryOp, CoordinateAccess, Ident, List, Opcode,
+        UnaryOp, Value, AST,
     },
     compiler_error, permute,
 };
@@ -53,10 +53,9 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
                         let len0 = self.seq.place(IROp::ListLength(arg0));
                         let len1 = self.seq.place(IROp::ListLength(arg1));
                         let len = self.seq.place(IROp::Binary(len0, len1, BinaryOp::Min));
-                        let list = self.seq.place(t.list_of(len)?);
                         let begin = self.seq.place(IROp::BeginBroadcast {
+                            inner_type: t,
                             end_index: len,
-                            write_to: list,
                         });
                         let arg0_bcd = BroadcastArg { t, id: 0 };
                         let arg1_bcd = BroadcastArg { t, id: 1 };
@@ -75,11 +74,24 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
             }
             ASTNode::Unary(v, op) => {
                 //TODO: come up with a cleaner way to deal with broadcast codegen
-                let t = self.rec_build_ir(*v, expr, frame)?;
-                if t.t != IRType::Number {
-                    compiler_error!(v, "cannot call unary operation {:?} on a {:?}", op, t)
+                let inner = self.rec_build_ir(*v, expr, frame)?;
+                if let Some(lt) = inner.t.downcast_list() {
+                    let len = self.seq.place(IROp::ListLength(inner));
+                    let begin = self.seq.place(IROp::BeginBroadcast {
+                        inner_type: lt,
+                        end_index: len,
+                    });
+                    let arg = BroadcastArg { t: lt, id: 0 };
+                    self.seq.push(IROp::SetBroadcastArg(inner, arg));
+                    let vali = self.seq.place(IROp::LoadBroadcastArg(arg));
+                    let v = self.build_simple_unary_fn(node, vali, *op)?;
+                    self.seq.place(IROp::EndBroadcast {
+                        begin: begin,
+                        ret: v,
+                    })
+                } else {
+                    self.build_simple_unary_fn(node, inner, *op)?
                 }
-                t
             }
             ASTNode::Parens(i, n) => {
                 todo!()
@@ -187,6 +199,40 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
             }
         })
     }
+    fn build_simple_unary_fn(&mut self, node: ASTNodeId, val: Id, op: UnaryOp) -> Result<Id> {
+        Ok(match (val.t, op) {
+            //Special case for unary negation. All other unary operations are disallowed on points
+            (IRType::Vec2, UnaryOp::Neg) => {
+                let x = self
+                    .seq
+                    .place(IROp::CoordinateOf(val, CoordinateAccess::DotAccessX));
+                let y = self
+                    .seq
+                    .place(IROp::CoordinateOf(val, CoordinateAccess::DotAccessY));
+                let xn = self.seq.place(IROp::Unary(x, UnaryOp::Neg));
+                let yn = self.seq.place(IROp::Unary(y, UnaryOp::Neg));
+                self.seq.place(IROp::Vec2(xn, yn))
+            }
+            (IRType::Vec3, UnaryOp::Neg) => {
+                let x = self
+                    .seq
+                    .place(IROp::CoordinateOf(val, CoordinateAccess::DotAccessX));
+                let y = self
+                    .seq
+                    .place(IROp::CoordinateOf(val, CoordinateAccess::DotAccessY));
+                let z = self
+                    .seq
+                    .place(IROp::CoordinateOf(val, CoordinateAccess::DotAccessZ));
+                let xn = self.seq.place(IROp::Unary(x, UnaryOp::Neg));
+                let yn = self.seq.place(IROp::Unary(y, UnaryOp::Neg));
+                let zn = self.seq.place(IROp::Unary(z, UnaryOp::Neg));
+                self.seq.place(IROp::Vec3(xn, yn, zn))
+            }
+            //all unary operations are allowed on numbers
+            (IRType::Number, op) => self.seq.place(IROp::Unary(val, op)),
+            (t, op) => compiler_error!(node, "cannot perform function {:?} on a {:?}", op, t),
+        })
+    }
     fn build_broadcast_binary(
         &mut self,
         node: ASTNodeId,
@@ -202,8 +248,8 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
         let len = self.seq.place(IROp::ListLength(arg0));
         let list = self.seq.place(t.list_of(len)?);
         let begin = self.seq.place(IROp::BeginBroadcast {
+            inner_type: t,
             end_index: len,
-            write_to: list,
         });
         let arg0_bcd = BroadcastArg { t, id: 0 };
         let arg1_bcd = BroadcastArg { t: arg1.t, id: 1 };
