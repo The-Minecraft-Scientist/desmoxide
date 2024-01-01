@@ -3,7 +3,7 @@ use std::collections::{hash_map::Entry, HashMap};
 use logos::Logos;
 use thin_vec::ThinVec;
 
-use anyhow::{Context, Error, Result};
+use anyhow::{bail, Context, Error, Result};
 
 use super::{
     expression::{EquationType, ExpressionMeta, ExpressionType},
@@ -12,9 +12,13 @@ use super::{
 };
 use crate::{
     bad_token,
+    compile::{frontend::IRSegment, ir::IRType},
     lexer::Token,
     util::{multipeek::MultiPeek, LexIter},
 };
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FnId(u32);
+
 #[derive(Debug)]
 pub struct Expressions<'a> {
     pub storage: &'a HashMap<u32, &'a str>,
@@ -48,6 +52,36 @@ impl<'a> Expressions<'a> {
             .cached_lhs_ast
             .as_ref()
             .context("Ident does not have valid LHS AST")?)
+    }
+    pub fn fn_ident_ast(&self, i: &str) -> Result<(&ThinVec<Ident<'a>>, &AST<'a>)> {
+        let idx = self.fn_lookup.get(i).context("could not find Ident")?;
+        let meta = self.meta.get(idx).context("could not get expression")?;
+        if let ExpressionType::Fn { ref params, .. } = meta
+            .expression_type
+            .as_ref()
+            .context("Expression was not processed")?
+        {
+            return Ok((
+                params,
+                meta.cached_lhs_ast
+                    .as_ref()
+                    .context("tried to get expression AST but it was't parsed yet")?,
+            ));
+        }
+        bail!("Tried to get function AST of a non-function Ident")
+    }
+    pub fn fn_ident_id(&self, i: &str) -> Result<u32> {
+        Ok(*self.fn_lookup.get(i).context("could not find Ident")?)
+    }
+    fn cache_compiled_fn(&self, idx: u32, t: IRType, ir: IRSegment) -> Result<()> {
+        self.meta
+            .get(&idx)
+            .context("could not get metadata of line")?
+            .compiled_versions
+            .borrow_mut()
+            .get_or_insert(HashMap::with_capacity(1))
+            .insert(t, ir);
+        Ok(())
     }
     pub fn scan_expression_type(&mut self, idx: u32) -> Result<MultiPeek<LexIter<'a, Token>>> {
         let mut lexer = self.line_lexer(idx)?;

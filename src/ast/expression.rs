@@ -1,5 +1,12 @@
-use std::fmt::Debug;
+use std::{
+    cell::{Cell, RefCell},
+    collections::HashMap,
+    fmt::Debug,
+    hash::Hash,
+};
 use thin_vec::ThinVec;
+
+use crate::compile::{frontend::IRSegment, ir::IRType};
 
 use super::{Comparison, Ident, AST};
 
@@ -7,6 +14,7 @@ use super::{Comparison, Ident, AST};
 pub struct ExpressionMeta<'a> {
     pub cached_rhs_ast: Option<AST<'a>>,
     pub cached_lhs_ast: Option<AST<'a>>,
+    pub compiled_versions: RefCell<Option<HashMap<IRType, IRSegment>>>,
     pub expression_type: Option<ExpressionType<'a>>,
 }
 impl<'a> ExpressionMeta<'a> {
@@ -25,6 +33,7 @@ impl<'a> ExpressionMeta<'a> {
     pub const INVALID: Self = Self {
         cached_lhs_ast: None,
         cached_rhs_ast: None,
+        compiled_versions: RefCell::new(None),
         expression_type: None,
     };
 }

@@ -6,7 +6,7 @@ use crate::{
     permute,
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum IRType {
     Number,
     Vec2,
@@ -51,7 +51,7 @@ impl IRType {
 /// Identifies a numeric argument to the relevant IRChunk by index in the argument list
 #[derive(Debug, Clone, Copy)]
 pub struct Id {
-    idx: u32,
+    pub idx: u32,
     pub t: IRType,
 }
 
@@ -89,7 +89,7 @@ pub struct BroadcastArg {
 }
 // typed indentifier that identifies an item of type and index in args
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct ArgId(Id);
+pub struct ArgId(pub Id);
 //TODO: investigate using this representation in egg/egglog
 /// ### Desmoxide IR format
 /// This is mostly equivalent to the TAC-based IR format used by desmos (see https://github.com/DesModder/DesModder/blob/main/parsing/IR.ts).
@@ -155,6 +155,13 @@ pub enum IROp {
     EndPiecewise {
         default: Id,
     },
+    /// Call a function
+    FnCall {
+        fn_uuid: u32,
+        t: IRType,
+    },
+    /// FnArg is of Never type. to refer to the output of a function, please refer to its parent FnCall instruction
+    FnArg(Id),
     /// Return the value stored
     Ret(Id),
 }
@@ -163,32 +170,36 @@ impl IROp {
         // this match statement should always be exhaustive to prevent new instructions from being made without assigning them a type
         match self {
             //Number type
-            IROp::Binary(_, _, _)
-            | IROp::Unary(_, _)
-            | IROp::Const(_)
-            | IROp::IConst(_)
-            | IROp::CoordinateOf(_, _)
-            | IROp::ListLength(_) => IRType::Number,
-            //Passthrough type
+            IROp::Binary(..)
+            | IROp::Unary(..)
+            | IROp::Const(..)
+            | IROp::IConst(..)
+            | IROp::CoordinateOf(..)
+            | IROp::ListLength(..) => IRType::Number,
+            //Passthrough types
             IROp::LoadArg(ArgId(Id { t, .. }))
             | IROp::LoadBroadcastArg(BroadcastArg { t, .. })
+            | IROp::FnCall { t, .. }
             | IROp::BeginPiecewise {
                 res: Id { t, .. }, ..
             }
-            | IROp::BeginBroadcast { inner_type: t, .. } => *t,
+            | IROp::BeginBroadcast { inner_type: t, .. }
+            | IROp::Ret(Id { t, .. }) => *t,
             //Opaque declarations
-            IROp::Vec2(_, _) => IRType::Vec2,
-            IROp::Vec3(_, _, _) => IRType::Vec3,
-            IROp::NumberList(_) => IRType::NumberList,
-            IROp::Vec2List(_) => IRType::Vec2List,
-            IROp::Vec3List(_) => IRType::Vec3List,
-            IROp::BeginBroadcast { .. } => IRType::Never,
-            IROp::SetBroadcastArg(_, _) => IRType::Never,
-            IROp::EndBroadcast { .. } => IRType::Never,
+            IROp::Vec2(..) => IRType::Vec2,
+            IROp::Vec3(..) => IRType::Vec3,
+            IROp::NumberList(..) => IRType::NumberList,
+            IROp::Vec2List(..) => IRType::Vec2List,
+            IROp::Vec3List(..) => IRType::Vec3List,
+            //Never types
+            IROp::BeginBroadcast { .. }
+            | IROp::SetBroadcastArg(..)
+            | IROp::EndBroadcast { .. }
+            | IROp::FnArg(..)
+            | IROp::InnerPiecewise { .. }
+            | IROp::EndPiecewise { .. } => IRType::Never,
+            //comparison
             IROp::Comparison { .. } => IRType::Bool,
-            // it is invalid to refer to a non- BeginPiecewise instruction
-            IROp::InnerPiecewise { .. } | IROp::EndPiecewise { .. } => IRType::Never,
-            IROp::Ret(i) => i.t,
         }
     }
 }
@@ -198,6 +209,11 @@ pub struct IRInstructionSeq {
     backing: BTreeMap<Id, IROp>,
 }
 impl IRInstructionSeq {
+    pub fn new() -> Self {
+        Self {
+            backing: BTreeMap::new(),
+        }
+    }
     pub fn push(&mut self, op: IROp) {
         let _ = self.place(op);
     }
