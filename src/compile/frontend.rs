@@ -204,10 +204,28 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
                     let t = self.compile_and_cache_fn(idx, vec![rhs.t])?;
                     let id = segment.instructions.place(IROp::FnCall(t));
                     segment.instructions.push(IROp::FnArg(rhs));
+                    return Ok(id);
                 }
-                todo!()
+                bail!(
+                    "\"{}\" does not reference any value or function",
+                    ident.as_str()
+                )
             }
-            ASTNode::FunctionCall(f, a) => todo!(),
+            ASTNode::FunctionCall(f, a) => {
+                let mut args = Vec::with_capacity(a.len());
+                for arg in a {
+                    args.push(self.rec_build_ir(segment, *arg, expr, frame)?);
+                }
+                let fn_id = self.compile_and_cache_fn(
+                    self.ctx.fn_ident_id(f.as_str())?,
+                    args.iter().map(|id| id.t).collect::<Vec<_>>(),
+                )?;
+                let id = segment.instructions.place(IROp::FnCall(fn_id));
+                let _ = segment
+                    .instructions
+                    .place_block(&args.iter().map(|a| IROp::FnArg(*a)).collect::<Vec<_>>());
+                id
+            }
             ASTNode::Index(l, v) => todo!(),
             ASTNode::List(l) => {
                 /*match l {
