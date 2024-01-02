@@ -227,37 +227,7 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
                 id
             }
             ASTNode::Index(l, v) => todo!(),
-            ASTNode::List(l) => {
-                /*match l {
-                    List::List(v) => {
-                        if let Some(f) = v.first() {
-                            let t = self.rec_build_ir(*f, expr, frame)?;
-                            for entry in v {
-                                if self.rec_build_ir(node, expr, frame)? != t {
-                                    compiler_error!(
-                                        node,
-                                        "List entries must all have the same type"
-                                    )
-                                }
-                            }
-                            t
-                        } else {
-                            //TODO: empty list should probably have its own type (presumably what the Desmos ListOfAny IR type is used for)
-                            IRType::NumberList
-                        }
-                    }
-                    List::ListComp(body, vars) => {
-                        let mut m = HashMap::with_capacity(vars.vars.len());
-                        for (id, n) in vars.vars.iter() {
-                            m.insert(id.as_str(), self.rec_build_ir(*n, expr, frame)?);
-                        }
-                        let new_frame = frame.clone().union(ArgsFrame { m });
-                        self.rec_build_ir(*body, expr, &new_frame)?
-                    }
-                    List::Range(_, _) => IRType::NumberList,
-                }*/
-                todo!()
-            }
+            ASTNode::List(l) => todo!(),
             ASTNode::Point(_, _) => todo!(),
             ASTNode::ListOp(_, _) => todo!(),
             ASTNode::CoordinateAccess(_, _) => todo!(),
