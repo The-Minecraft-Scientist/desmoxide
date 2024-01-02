@@ -17,7 +17,7 @@ use crate::{
     util::{multipeek::MultiPeek, LexIter},
 };
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct FnId(u32);
+pub struct FnId(pub u32, pub IRType);
 
 #[derive(Debug)]
 pub struct Expressions<'a> {
@@ -53,9 +53,8 @@ impl<'a> Expressions<'a> {
             .as_ref()
             .context("Ident does not have valid LHS AST")?)
     }
-    pub fn fn_ident_ast(&self, i: &str) -> Result<(&ThinVec<Ident<'a>>, &AST<'a>)> {
-        let idx = self.fn_lookup.get(i).context("could not find Ident")?;
-        let meta = self.meta.get(idx).context("could not get expression")?;
+    pub fn fn_ident_ast(&self, idx: u32) -> Result<(&ThinVec<Ident<'a>>, &AST<'a>)> {
+        let meta = self.meta.get(&idx).context("could not get expression")?;
         if let ExpressionType::Fn { ref params, .. } = meta
             .expression_type
             .as_ref()
@@ -73,7 +72,7 @@ impl<'a> Expressions<'a> {
     pub fn fn_ident_id(&self, i: &str) -> Result<u32> {
         Ok(*self.fn_lookup.get(i).context("could not find Ident")?)
     }
-    fn cache_compiled_fn(&self, idx: u32, t: IRType, ir: IRSegment) -> Result<()> {
+    pub(crate) fn cache_compiled_fn(&self, idx: u32, t: IRType, ir: IRSegment) -> Result<()> {
         self.meta
             .get(&idx)
             .context("could not get metadata of line")?

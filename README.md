@@ -9,3 +9,6 @@ desmos, but its incredibly fast
 ### current features
  * mostly feature-complete parser and AST structure for Desmos expressions (see [here](https://github.com/The-Minecraft-Scientist/desmoxide/blob/master/src/ast/parse_manager.rs))
  * First iteration of intermediate representation format implemented (see [here](https://github.com/The-Minecraft-Scientist/desmoxide/blob/master/src/compile/ir.rs))
+
+#### relevant design decisions
+ * desmoxide should ***never*** panic. Ever. Calls to 'unwrap' and the likes are ONLY allowed when it is invariant that that unwrap will succeed. The `anyhow` crate takes away any excuse I had for panics/unwrap spam

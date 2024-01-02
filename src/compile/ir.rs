@@ -2,7 +2,7 @@ use anyhow::{bail, Context, Result};
 use std::collections::BTreeMap;
 
 use crate::{
-    ast::{BinaryOp, Comparison, CoordinateAccess, Ident, UnaryOp},
+    ast::{parser::FnId, BinaryOp, Comparison, CoordinateAccess, Ident, UnaryOp},
     permute,
 };
 
@@ -156,10 +156,7 @@ pub enum IROp {
         default: Id,
     },
     /// Call a function
-    FnCall {
-        fn_uuid: u32,
-        t: IRType,
-    },
+    FnCall(FnId),
     /// FnArg is of Never type. to refer to the output of a function, please refer to its parent FnCall instruction
     FnArg(Id),
     /// Return the value stored
@@ -179,7 +176,7 @@ impl IROp {
             //Passthrough types
             IROp::LoadArg(ArgId(Id { t, .. }))
             | IROp::LoadBroadcastArg(BroadcastArg { t, .. })
-            | IROp::FnCall { t, .. }
+            | IROp::FnCall(FnId(_, t))
             | IROp::BeginPiecewise {
                 res: Id { t, .. }, ..
             }

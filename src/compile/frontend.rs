@@ -3,8 +3,8 @@ use std::{collections::HashMap, fmt::Debug, hash::Hash};
 use super::ir::{ArgId, BroadcastArg, IRInstructionSeq, IROp, IRType, Id};
 use crate::{
     ast::{
-        parser::Expressions, ASTNode, ASTNodeId, BinaryOp, CoordinateAccess, Ident, List, Opcode,
-        UnaryOp, Value, AST,
+        parser::{Expressions, FnId},
+        ASTNode, ASTNodeId, BinaryOp, CoordinateAccess, Ident, List, Opcode, UnaryOp, Value, AST,
     },
     compiler_error, permute,
 };
@@ -43,8 +43,10 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
             idx: 1,
             t: IRType::Number,
         })));
-        frame.map.insert("x", x);
-        frame.map.insert("y", y);
+        let mut s = Scope::with_capacity(2);
+        s.insert("x", x);
+        s.insert("y", y);
+        frame.push_scope(s);
         let ret_id = self.rec_build_ir(
             &mut segment,
             expr.root
@@ -62,14 +64,16 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
         expr: &'borrow AST<'source>,
     ) -> Result<IRSegment> {
         let mut frame = Frame::empty();
+        let mut scope = Scope::with_capacity(args.len());
         let mut segment = IRSegment::new(arg_types.clone());
         for (index, ident) in args.iter().enumerate() {
             let arg = segment.instructions.place(IROp::LoadArg(ArgId(Id {
                 idx: index as u32,
                 t: arg_types[index],
             })));
-            frame.map.insert(ident.as_str(), arg);
+            scope.insert(ident.as_str(), arg);
         }
+        frame.push_scope(scope);
         let ret_id = self.rec_build_ir(
             &mut segment,
             expr.root
@@ -79,6 +83,13 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
         )?;
         segment.ret = Some(ret_id);
         Ok(segment)
+    }
+    pub fn compile_and_cache_fn(&mut self, idx: u32, args: Vec<IRType>) -> Result<FnId> {
+        let (argnames, ast) = self.ctx.fn_ident_ast(idx)?;
+        let segment = self.compile_fn(&args, &argnames, ast)?;
+        let t = segment.ret.unwrap().t;
+        self.ctx.cache_compiled_fn(idx, t, segment)?;
+        Ok(FnId(idx, t))
     }
     fn rec_build_ir(
         &mut self,
@@ -92,8 +103,8 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
                 Value::ConstantI64(v) => segment.instructions.place(IROp::IConst(*v)),
                 Value::ConstantF64(v) => segment.instructions.place(IROp::Const(*v)),
                 Value::Ident(s) => {
-                    if let Some(t) = frame.map.get(s.as_str()) {
-                        *t
+                    if let Some(t) = frame.map_ident(s.as_str()) {
+                        t
                     } else {
                         let a = self.ctx.ident_ast(&s)?;
                         self.rec_build_ir(segment, a.root.unwrap(), a, frame)?
@@ -175,16 +186,25 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
                 let rhs = self.rec_build_ir(segment, *n, expr, frame)?;
                 // ident could be an Ident or Fn expression. We handle the Ident case first
 
-                //If this ident already has a value present in the frame
-                if let Some(id) = frame.map.get(ident.as_str()) {
+                //locally defined value
+                if let Some(id) = frame.map_ident(ident.as_str()) {
                     return Ok(segment
                         .instructions
-                        .place(IROp::Binary(*id, rhs, BinaryOp::Mul)));
+                        .place(IROp::Binary(id, rhs, BinaryOp::Mul)));
                 }
+                //wackscope
                 if let Ok(a) = self.ctx.ident_ast(ident.as_str()) {
-                    return self.rec_build_ir(segment, a.root.unwrap(), a, frame);
+                    let lhs = self.rec_build_ir(segment, a.root.unwrap(), a, frame)?;
+                    return Ok(segment
+                        .instructions
+                        .place(IROp::Binary(lhs, rhs, BinaryOp::Mul)));
                 }
-                if let Ok((params, ast)) = self.ctx.fn_ident_ast(ident.as_str()) {}
+                //function call
+                if let Ok(idx) = self.ctx.fn_ident_id(ident.as_str()) {
+                    let t = self.compile_and_cache_fn(idx, vec![rhs.t])?;
+                    let id = segment.instructions.place(IROp::FnCall(t));
+                    segment.instructions.push(IROp::FnArg(rhs));
+                }
                 todo!()
             }
             ASTNode::FunctionCall(f, a) => todo!(),
@@ -371,12 +391,43 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
 
 #[derive(Debug, Clone)]
 pub struct Frame<'a> {
-    map: HashMap<&'a str, Id>,
+    scopes: Vec<Scope<'a>>,
 }
 impl<'a> Frame<'a> {
     pub fn empty() -> Self {
         Self {
-            map: HashMap::with_capacity(10),
+            scopes: Vec::with_capacity(1),
         }
+    }
+    pub fn push_scope(&mut self, scope: Scope<'a>) {
+        self.scopes.push(scope);
+    }
+    pub fn pop_scope(&mut self) {
+        let _ = self.scopes.pop();
+    }
+    pub fn map_ident(&self, ident: &'a str) -> Option<Id> {
+        for scope in self.scopes.iter().rev() {
+            if let Some(id) = scope.get(ident) {
+                return Some(id);
+            }
+        }
+        None
+    }
+}
+#[derive(Debug, Clone)]
+pub struct Scope<'a> {
+    map: HashMap<&'a str, Id>,
+}
+impl<'a> Scope<'a> {
+    pub fn with_capacity(cap: usize) -> Self {
+        Self {
+            map: HashMap::with_capacity(cap),
+        }
+    }
+    pub fn insert(&mut self, k: &'a str, v: Id) {
+        self.map.insert(k, v);
+    }
+    pub fn get(&self, k: &'a str) -> Option<Id> {
+        self.map.get(k).map(|a| *a)
     }
 }
