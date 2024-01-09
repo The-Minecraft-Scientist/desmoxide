@@ -206,7 +206,8 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
                     segment.instructions.push(IROp::FnArg(rhs));
                     return Ok(id);
                 }
-                bail!(
+                compiler_error!(
+                    node,
                     "\"{}\" does not reference any value or function",
                     ident.as_str()
                 )
@@ -226,7 +227,15 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
                     .place_block(&args.iter().map(|a| IROp::FnArg(*a)).collect::<Vec<_>>());
                 id
             }
-            ASTNode::Index(l, v) => todo!(),
+            ASTNode::Index(l, v) => {
+                match expr.get_node(*v)? {
+                    //List filter
+                    ASTNode::Comparison(a, b, c) => {}
+                    //normal indexing
+                    a => {}
+                }
+                todo!()
+            }
             ASTNode::List(l) => todo!(),
             ASTNode::Point(_, _) => todo!(),
             ASTNode::ListOp(_, _) => todo!(),

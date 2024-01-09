@@ -2,7 +2,7 @@ use anyhow::{bail, Context, Result};
 use std::collections::BTreeMap;
 
 use crate::{
-    ast::{parser::FnId, BinaryOp, Comparison, CoordinateAccess, Ident, UnaryOp},
+    ast::{parser::FnId, BinaryOp, Comparison, CoordinateAccess, Ident, ListOp, UnaryOp},
     permute,
 };
 
@@ -87,6 +87,33 @@ pub struct BroadcastArg {
     pub t: IRType,
     pub id: u8,
 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnaryListOp {
+    //Ret num
+    Min,
+    Max,
+    Total,
+    Len,
+
+    //Ret list
+    Unique,
+    Sort,
+    Shuffle,
+}
+impl UnaryListOp {
+    pub fn ty(&self) -> IRType {
+        match self {
+            Self::Max | Self::Min | Self::Total | Self::Len => IRType::Number,
+            Self::Unique | Self::Shuffle | Self::Sort => IRType::NumberList,
+        }
+    }
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BinaryListOp {
+    //Ret list
+    Join,
+    //idk there are probably more lol
+}
 // typed indentifier that identifies an item of type and index in args
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ArgId(pub Id);
@@ -104,6 +131,8 @@ pub struct ArgId(pub Id);
 pub enum IROp {
     Binary(Id, Id, BinaryOp),
     Unary(Id, UnaryOp),
+    UnaryListOp(Id, UnaryListOp),
+    BinaryListOp(Id, Id, BinaryListOp),
     /// 64-bit floating point constant
     Const(f64),
     /// 64-bit integer constant
@@ -143,7 +172,7 @@ pub enum IROp {
         comp: Comparison,
         rhs: Id,
     },
-    /// Piecewise consist of a BeginPiecewise, any number of InnerPiecewise s and an EndPiecewise
+    /// Piecewise consist of a BeginPiecewise, any number of InnerPiecewise and an EndPiecewise
     BeginPiecewise {
         comp: Id,
         res: Id,
@@ -197,6 +226,8 @@ impl IROp {
             | IROp::EndPiecewise { .. } => IRType::Never,
             //comparison
             IROp::Comparison { .. } => IRType::Bool,
+            IROp::UnaryListOp(_, op) => todo!(),
+            IROp::BinaryListOp(_, _, op) => todo!(),
         }
     }
 }
