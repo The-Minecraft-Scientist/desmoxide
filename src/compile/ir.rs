@@ -1,5 +1,5 @@
 use anyhow::{bail, Context, Result};
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, num::NonZeroU32};
 
 use crate::{
     ast::{parser::FnId, BinaryOp, Comparison, CoordinateAccess, Ident, ListOp, UnaryOp},
@@ -12,6 +12,7 @@ pub enum IRType {
     Vec2,
     Vec3,
     Never,
+    Optional,
     Bool,
     NumberList,
     Vec2List,
@@ -113,6 +114,14 @@ pub enum BinaryListOp {
     //Ret list
     Join,
     //idk there are probably more lol
+    IndexRead,
+    IndexWrite,
+    Push,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum EndIndex {
+    Val(Id),
+    Full,
 }
 // typed indentifier that identifies an item of type and index in args
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -126,9 +135,12 @@ pub struct ArgId(pub Id);
 ///  * `Never`: instructions that Never yield a value of any kind
 ///  * `Bool`: comparison instructions that yield boolean type
 ///  * `List`: opaque list identifer
+///  * `Optional`: Either Some(value) or None. Not a value type, added specifically for internal implementations of various list operations
 /// and special broadcasting instructions are used to iterate over complex types component-wise
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum IROp {
+    ///No-op, used to generate a valid Never value to point to without jank
+    Nop,
     Binary(Id, Id, BinaryOp),
     Unary(Id, UnaryOp),
     UnaryListOp(Id, UnaryListOp),
@@ -156,7 +168,7 @@ pub enum IROp {
     /// Begins a broadcast loop that executes its body over indices 0->end_index inclusive, and stores its output in b
     BeginBroadcast {
         inner_type: IRType,
-        end_index: Id,
+        end_index: EndIndex,
     },
     /// Only allowed directly following SetBroadcast or BeginBroadcast instructions. Sets the broadcast argument slot at b to the item a
     SetBroadcastArg(Id, BroadcastArg),
@@ -223,7 +235,8 @@ impl IROp {
             | IROp::EndBroadcast { .. }
             | IROp::FnArg(..)
             | IROp::InnerPiecewise { .. }
-            | IROp::EndPiecewise { .. } => IRType::Never,
+            | IROp::EndPiecewise { .. }
+            | IROp::Nop => IRType::Never,
             //comparison
             IROp::Comparison { .. } => IRType::Bool,
             IROp::UnaryListOp(_, op) => todo!(),

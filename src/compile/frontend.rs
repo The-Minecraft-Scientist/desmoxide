@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::Debug, hash::Hash};
 
-use super::ir::{ArgId, BroadcastArg, IRInstructionSeq, IROp, IRType, Id};
+use super::ir::{ArgId, BroadcastArg, EndIndex, IRInstructionSeq, IROp, IRType, Id};
 use crate::{
     ast::{
         parser::{Expressions, FnId},
@@ -138,7 +138,7 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
                                 .place(IROp::Binary(len0, len1, BinaryOp::Min));
                         let begin = segment.instructions.place(IROp::BeginBroadcast {
                             inner_type: t,
-                            end_index: len,
+                            end_index: super::ir::EndIndex::Val(len),
                         });
                         let arg0_bcd = BroadcastArg { t, id: 0 };
                         let arg1_bcd = BroadcastArg { t, id: 1 };
@@ -169,7 +169,7 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
                     let len = segment.instructions.place(IROp::ListLength(inner));
                     let begin = segment.instructions.place(IROp::BeginBroadcast {
                         inner_type: lt,
-                        end_index: len,
+                        end_index: EndIndex::Val(len),
                     });
                     let arg = BroadcastArg { t: lt, id: 0 };
                     segment.instructions.push(IROp::SetBroadcastArg(inner, arg));
@@ -227,10 +227,40 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
                     .place_block(&args.iter().map(|a| IROp::FnArg(*a)).collect::<Vec<_>>());
                 id
             }
-            ASTNode::Index(l, v) => {
-                match expr.get_node(*v)? {
+            ASTNode::Index(list, comparison) => {
+                match expr.get_node(*comparison)? {
                     //List filter
-                    ASTNode::Comparison(a, b, c) => {}
+                    ASTNode::Comparison(rhs, comp, lhs) => {
+                        let l = self.rec_build_ir(segment, *list, expr, frame)?;
+                        //TODO: assertions for all of this logic
+
+                        let begin = segment.instructions.place(IROp::BeginBroadcast {
+                            inner_type: l
+                                .t
+                                .downcast_list()
+                                .context("expected a list, got a value")?,
+                            end_index: EndIndex::Full,
+                        });
+                        let arg = BroadcastArg { t: l.t, id: 0 };
+                        segment.instructions.push(IROp::SetBroadcastArg(l, arg));
+                        let val = segment.instructions.place(IROp::LoadBroadcastArg(arg));
+                        let comp_lhs = self.rec_build_ir(segment, *lhs, expr, frame)?;
+                        let comp_rhs = self.rec_build_ir(segment, *rhs, expr, frame)?;
+                        let comp = segment.instructions.place(IROp::Comparison {
+                            lhs: comp_lhs,
+                            comp: *comp,
+                            rhs: comp_rhs,
+                        });
+                        let nop = segment.instructions.place(IROp::Nop);
+                        let ret = segment
+                            .instructions
+                            .place(IROp::BeginPiecewise { comp, res: val });
+                        segment
+                            .instructions
+                            .push(IROp::EndPiecewise { default: nop });
+                        segment.instructions.push(IROp::EndBroadcast { begin, ret });
+                        return Ok(begin);
+                    }
                     //normal indexing
                     a => {}
                 }
@@ -363,11 +393,9 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
         let t = list_arg_t;
         let arg1 = value_arg;
         //Generate broadcast header
-        let len = segment.instructions.place(IROp::ListLength(arg0));
-        let list = segment.instructions.place(t.list_of(len)?);
         let begin = segment.instructions.place(IROp::BeginBroadcast {
             inner_type: t,
-            end_index: len,
+            end_index: EndIndex::Full,
         });
         let arg0_bcd = BroadcastArg { t, id: 0 };
         let arg1_bcd = BroadcastArg { t: arg1.t, id: 1 };
