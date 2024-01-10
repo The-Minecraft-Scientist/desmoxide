@@ -6,6 +6,7 @@ use crate::{
         parser::{Expressions, FnId},
         ASTNode, ASTNodeId, BinaryOp, CoordinateAccess, Ident, List, Opcode, UnaryOp, Value, AST,
     },
+    compile::ir::BinaryListOp,
     compiler_error, permute,
 };
 use anyhow::{bail, Context, Result};
@@ -227,12 +228,12 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
                     .place_block(&args.iter().map(|a| IROp::FnArg(*a)).collect::<Vec<_>>());
                 id
             }
-            ASTNode::Index(list, comparison) => {
-                match expr.get_node(*comparison)? {
+            ASTNode::Index(list, index) => {
+                let l = self.rec_build_ir(segment, *list, expr, frame)?;
+                match expr.get_node(*index)? {
                     //List filter
                     ASTNode::Comparison(rhs, comp, lhs) => {
-                        let l = self.rec_build_ir(segment, *list, expr, frame)?;
-                        //TODO: assertions for all of this logic
+                        //TODO: assertions for all of this
 
                         let begin = segment.instructions.place(IROp::BeginBroadcast {
                             inner_type: l
@@ -259,12 +260,18 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
                             .instructions
                             .push(IROp::EndPiecewise { default: nop });
                         segment.instructions.push(IROp::EndBroadcast { begin, ret });
-                        return Ok(begin);
+                        begin
                     }
                     //normal indexing
-                    a => {}
+                    a => {
+                        let idx_val = self.rec_build_ir(segment, *index, expr, frame)?;
+                        segment.instructions.place(IROp::BinaryListOp(
+                            l,
+                            idx_val,
+                            BinaryListOp::IndexRead,
+                        ))
+                    }
                 }
-                todo!()
             }
             ASTNode::List(l) => todo!(),
             ASTNode::Point(_, _) => todo!(),
