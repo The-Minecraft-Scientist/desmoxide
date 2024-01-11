@@ -273,7 +273,7 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
                     }
                 }
             }
-            ASTNode::List(l) => todo!(),
+            ASTNode::List(l) => {}
             ASTNode::Point(_, _) => todo!(),
             ASTNode::ListOp(_, _) => todo!(),
             ASTNode::CoordinateAccess(_, _) => todo!(),

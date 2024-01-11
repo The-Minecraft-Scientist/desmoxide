@@ -239,8 +239,21 @@ impl IROp {
             | IROp::Nop => IRType::Never,
             //comparison
             IROp::Comparison { .. } => IRType::Bool,
-            IROp::UnaryListOp(_, op) => todo!(),
-            IROp::BinaryListOp(_, _, op) => todo!(),
+            IROp::UnaryListOp(l, op) => match op {
+                UnaryListOp::Min | UnaryListOp::Max | UnaryListOp::Total | UnaryListOp::Len => {
+                    IRType::Number
+                }
+                UnaryListOp::Unique | UnaryListOp::Sort | UnaryListOp::Shuffle => l.t,
+            },
+            IROp::BinaryListOp(lhs, rhs, op) => {
+                match op {
+                    BinaryListOp::Join => lhs.t,
+                    //TODO: deal with this. This invariant always needs to hold, need to implement IR verifier/specify all possible invariants required to have valid IR
+                    BinaryListOp::IndexRead => lhs.t.downcast_list().unwrap(),
+                    BinaryListOp::IndexWrite => IRType::Never,
+                    BinaryListOp::Push => IRType::Never,
+                }
+            }
         }
     }
 }
