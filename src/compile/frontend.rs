@@ -273,15 +273,35 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
                     }
                 }
             }
-            ASTNode::List(l) => {}
-            ASTNode::Point(_, _) => todo!(),
+            ASTNode::List(l) => {
+                //TODO: deal with list instantiation in a non-jank way in IR
+                match l {
+                    List::ListComp(expr, vals) => todo!(),
+                    List::Range(begin, end) => todo!(),
+                    List::List(exprs) => todo!(),
+                }
+                todo!()
+            }
+            ASTNode::Point(x, y) => {
+                let x = self.rec_build_ir(segment, *x, expr, frame)?;
+                let y = self.rec_build_ir(segment, *y, expr, frame)?;
+                segment.instructions.place(IROp::Vec2(x, y))
+            }
             ASTNode::ListOp(_, _) => todo!(),
-            ASTNode::CoordinateAccess(_, _) => todo!(),
-            ASTNode::Comparison(_, _, _) => todo!(),
-            ASTNode::Piecewise {
-                default: _,
-                entries: _,
-            } => todo!(),
+            ASTNode::CoordinateAccess(p, access) => {
+                let p = self.rec_build_ir(segment, *p, expr, frame)?;
+                segment.instructions.place(IROp::CoordinateOf(p, *access))
+            }
+            ASTNode::Comparison(lhs, comp, rhs) => {
+                let lhs = self.rec_build_ir(segment, *lhs, expr, frame)?;
+                let rhs = self.rec_build_ir(segment, *rhs, expr, frame)?;
+                segment.instructions.place(IROp::Comparison {
+                    lhs,
+                    comp: *comp,
+                    rhs,
+                })
+            }
+            ASTNode::Piecewise { default, entries } => todo!(),
         };
         Ok(res)
     }
