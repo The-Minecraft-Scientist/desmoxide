@@ -14,7 +14,7 @@ use thin_vec::ThinVec;
 
 #[derive(Debug)]
 pub struct Frontend<'borrow, 'source> {
-    ctx: &'borrow Expressions<'source>,
+    pub ctx: &'borrow Expressions<'source>,
 }
 /// Contains a standalone executable IR sequence along with metadata about its arguments and their types
 #[derive(Debug, Clone)]
@@ -33,7 +33,7 @@ impl IRSegment {
     }
 }
 impl<'borrow, 'source> Frontend<'borrow, 'source> {
-    fn compile_expr(&mut self, expr: &'borrow AST<'source>) -> Result<IRSegment> {
+    pub fn compile_expr(&mut self, expr: &'borrow AST<'source>) -> Result<IRSegment> {
         let mut frame = Frame::empty();
         let mut segment = IRSegment::new(vec![IRType::Number, IRType::Number]);
         let x = segment.instructions.place(IROp::LoadArg(ArgId(Id {

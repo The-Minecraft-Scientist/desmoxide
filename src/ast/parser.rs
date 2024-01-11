@@ -49,7 +49,7 @@ impl<'a> Expressions<'a> {
             .meta
             .get(idx)
             .context("could not get expression")?
-            .cached_lhs_ast
+            .cached_rhs_ast
             .as_ref()
             .context("Ident does not have valid LHS AST")?)
     }
@@ -62,7 +62,7 @@ impl<'a> Expressions<'a> {
         {
             return Ok((
                 params,
-                meta.cached_lhs_ast
+                meta.cached_rhs_ast
                     .as_ref()
                     .context("tried to get expression AST but it was't parsed yet")?,
             ));
