@@ -44,10 +44,11 @@ impl<'a> Expressions<'a> {
         ))))
     }
     pub fn ident_ast(&self, i: &str) -> Result<&AST<'a>> {
-        let idx = self.ident_lookup.get(i).context("could not find Ident")?;
+        dbg!(&self.meta);
+        let idx = self.fn_ident_id(i)?;
         Ok(self
             .meta
-            .get(idx)
+            .get(&idx)
             .context("could not get expression")?
             .cached_rhs_ast
             .as_ref()
@@ -70,7 +71,10 @@ impl<'a> Expressions<'a> {
         bail!("Tried to get function AST of a non-function Ident")
     }
     pub fn fn_ident_id(&self, i: &str) -> Result<u32> {
-        Ok(*self.fn_lookup.get(i).context("could not find Ident")?)
+        Ok(*self
+            .fn_lookup
+            .get(i)
+            .context(format!("could not find Ident {}", i))?)
     }
     pub(crate) fn cache_compiled_fn(&self, idx: u32, t: IRType, ir: IRSegment) -> Result<()> {
         self.meta

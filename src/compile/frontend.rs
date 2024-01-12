@@ -104,6 +104,7 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
                 Value::ConstantI64(v) => segment.instructions.place(IROp::IConst(*v)),
                 Value::ConstantF64(v) => segment.instructions.place(IROp::Const(*v)),
                 Value::Ident(s) => {
+                    //TODO: handle x and y as special cases here
                     if let Some(t) = frame.map_ident(s.as_str()) {
                         t
                     } else {

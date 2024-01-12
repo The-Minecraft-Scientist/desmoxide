@@ -139,7 +139,7 @@ pub struct ArgId(pub Id);
 /// and special broadcasting instructions are used to iterate over complex types component-wise
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum IROp {
-    ///No-op, used to generate a valid Never value to point to without jank
+    ///No-op, used to generate a valid Never value to point to without actually invoking a control flow instruction
     Nop,
     Binary(Id, Id, BinaryOp),
     Unary(Id, UnaryOp),
@@ -223,7 +223,7 @@ impl IROp {
             }
             | IROp::BeginBroadcast { inner_type: t, .. }
             | IROp::Ret(Id { t, .. }) => *t,
-            //Opaque declarations
+            //Opaque types
             IROp::Vec2(..) => IRType::Vec2,
             IROp::Vec3(..) => IRType::Vec3,
             IROp::NumberList(..) => IRType::NumberList,
