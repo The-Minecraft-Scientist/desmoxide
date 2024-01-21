@@ -32,19 +32,19 @@ impl IRType {
         )
     }
     pub fn downcast_list(&self) -> Option<Self> {
-        match self {
-            Self::NumberList => Some(Self::Number),
-            Self::Vec2 => Some(Self::Vec2),
-            Self::Vec3 => Some(Self::Vec3),
-            _ => None,
-        }
+        Some(match self {
+            Self::NumberList => Self::Number,
+            Self::Vec2 => Self::Vec2,
+            Self::Vec3 => Self::Vec3,
+            _ => return None,
+        })
     }
-    pub fn list_of(&self, len: Id) -> Result<IROp> {
-        Ok(match self {
-            IRType::Number => IROp::NumberList(len),
-            IRType::Vec2 => IROp::Vec2List(len),
-            IRType::Vec3 => IROp::Vec3List(len),
-            t => bail!("cannot create a list of {:?}", t),
+    pub fn upcast_list(&self) -> Option<Self> {
+        Some(match self {
+            Self::Number => Self::NumberList,
+            Self::Vec2 => Self::Vec2List,
+            Self::Vec3 => Self::Vec3List,
+            _ => return None,
         })
     }
 }
@@ -151,18 +151,15 @@ pub enum IROp {
     IConst(i64),
     /// load args\[a] to this reg
     LoadArg(ArgId),
+    /// list literal. It is valid to refer to a subset of this list by referring to a ListLit that is not the beginning of a. All items in the list must be of the same type
+    ListLit(Id),
     /// load args\[a]\[i] (if args\[a] is a list of number)
     CoordinateOf(Id, CoordinateAccess),
     /// 2d vector.
     Vec2(Id, Id),
     /// 3d vector.
     Vec3(Id, Id, Id),
-    /// Instantiate an empty list of number with length a
-    NumberList(Id),
-    /// Instantiate an empty list of Vec2 with length a
-    Vec2List(Id),
-    /// Instantiate an empty list of Vec3 with length a
-    Vec3List(Id),
+    //TODO: PUT THIS IN ListOp
     /// length of list at a
     ListLength(Id),
     /// Begins a broadcast loop that executes its body over indices 0->end_index inclusive, and stores its output in b
@@ -226,9 +223,10 @@ impl IROp {
             //Opaque types
             IROp::Vec2(..) => IRType::Vec2,
             IROp::Vec3(..) => IRType::Vec3,
-            IROp::NumberList(..) => IRType::NumberList,
-            IROp::Vec2List(..) => IRType::Vec2List,
-            IROp::Vec3List(..) => IRType::Vec3List,
+            //TODO: see BinarylistOp
+            IROp::ListLit(Id { t, .. }) => t
+                .upcast_list()
+                .expect("cannot make a list of non-number/vec types"),
             //Never types
             IROp::BeginBroadcast { .. }
             | IROp::SetBroadcastArg(..)
@@ -314,8 +312,3 @@ impl IRInstructionSeq {
             .context("called latest on empty InstructionSeq")
     }
 }
-pub struct BroadcastBuilder<'a> {
-    seq: &'a mut IRInstructionSeq,
-    args: Vec<BroadcastArg>,
-}
-impl<'a> BroadcastBuilder<'a> {}
