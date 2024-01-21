@@ -319,7 +319,33 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
                     rhs,
                 })
             }
-            ASTNode::Piecewise { default, entries } => todo!(),
+            ASTNode::Piecewise { default, entries } => {
+                if entries.len() == 0 {
+                    compiler_error!(node, "Piecewises should have at least one condition")
+                };
+                let default = self.rec_build_ir(segment, *default, expr, frame)?;
+                let mut v = Vec::with_capacity(entries.len());
+                //codegen dependencies of this piecewise first
+                for entry in entries {
+                    let comp = self.rec_build_ir(segment, entry.comp, expr, frame)?;
+                    let result = self.rec_build_ir(segment, entry.result, expr, frame)?;
+                    v.push((comp, result));
+                }
+                let mut i = v.into_iter();
+                let first = i.next().unwrap();
+                let head = segment.instructions.place(IROp::BeginPiecewise {
+                    comp: first.0,
+                    res: first.1,
+                });
+
+                for (comp, res) in i {
+                    segment
+                        .instructions
+                        .push(IROp::InnerPiecewise { comp, res })
+                }
+                segment.instructions.push(IROp::EndPiecewise { default });
+                head
+            }
         };
         Ok(res)
     }

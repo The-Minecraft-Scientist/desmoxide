@@ -178,8 +178,8 @@ pub struct ListCompInfo<'a> {
 }
 #[derive(Debug, Clone)]
 pub struct PiecewiseEntry {
-    comp: ASTNodeId,
-    result: ASTNodeId,
+    pub comp: ASTNodeId,
+    pub result: ASTNodeId,
 }
 
 #[derive(Clone)]
