@@ -279,9 +279,26 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
                 match l {
                     List::ListComp(expr, vals) => todo!(),
                     List::Range(begin, end) => todo!(),
-                    List::List(exprs) => todo!(),
+                    List::List(exprs) => {
+                        let mut it = exprs.iter();
+                        let Some(head) = it.next() else {
+                            compiler_error!(
+                                node,
+                                "desmoxide does not yet support empty list literals"
+                            );
+                        };
+                        let head = self.rec_build_ir(segment, *head, expr, frame)?;
+                        let i = it
+                            .map(|id| self.rec_build_ir(segment, *id, expr, frame))
+                            .collect::<Vec<_>>()
+                            .into_iter();
+                        let head = segment.instructions.place(IROp::ListLit(head));
+                        for val in i {
+                            segment.instructions.push(IROp::ListLit(val?));
+                        }
+                        head
+                    }
                 }
-                todo!()
             }
             ASTNode::Point(x, y) => {
                 let x = self.rec_build_ir(segment, *x, expr, frame)?;
