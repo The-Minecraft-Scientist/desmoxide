@@ -45,7 +45,6 @@ impl<'a> Expressions<'a> {
     }
     pub fn ident_ast(&self, i: &str) -> Result<&AST<'a>> {
         let idx = self.ident_id(i)?;
-        dbg!(idx);
         Ok(self
             .meta
             .get(&idx)
@@ -71,7 +70,6 @@ impl<'a> Expressions<'a> {
         bail!("Tried to get function AST of a non-function Ident")
     }
     pub fn fn_ident_id(&self, i: &str) -> Result<u32> {
-        dbg!(&self.fn_lookup);
         Ok(*self
             .fn_lookup
             .get(i)

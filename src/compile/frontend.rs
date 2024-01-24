@@ -21,9 +21,9 @@ pub struct Frontend<'borrow, 'source> {
 /// Contains a standalone executable IR sequence along with metadata about its arguments and their types
 #[derive(Debug, Clone)]
 pub struct IRSegment {
-    args: Vec<IRType>,
-    instructions: IRInstructionSeq,
-    ret: Option<Id>,
+    pub args: Vec<IRType>,
+    pub instructions: IRInstructionSeq,
+    pub ret: Option<Id>,
 }
 impl IRSegment {
     pub fn new(args: Vec<IRType>) -> Self {
@@ -188,7 +188,8 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
                     let v = self.build_simple_unary_fn(segment, node, vali, *op)?;
                     segment
                         .instructions
-                        .place(IROp::EndBroadcast { begin, ret: v })
+                        .push(IROp::EndBroadcast { begin, ret: v });
+                    begin
                 } else {
                     self.build_simple_unary_fn(segment, node, inner, *op)?
                 }
@@ -240,16 +241,16 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
             }
             ASTNode::Index(list, index) => {
                 let l = self.rec_build_ir(segment, *list, expr, frame)?;
+                let inner_type =
+                    l.t.downcast_list()
+                        .context("expected a list, got a value")?;
                 match expr.get_node(*index)? {
                     //List filter
                     ASTNode::Comparison(rhs, comp, lhs) => {
                         //TODO: assertions for all of this
 
                         let begin = segment.instructions.place(IROp::BeginBroadcast {
-                            inner_type: l
-                                .t
-                                .downcast_list()
-                                .context("expected a list, got a value")?,
+                            inner_type,
                             end_index: EndIndex::Full,
                         });
                         let arg = BroadcastArg { t: l.t, id: 0 };
@@ -274,12 +275,39 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
                     }
                     //normal indexing
                     a => {
+                        //TODO: type assertions
                         let idx_val = self.rec_build_ir(segment, *index, expr, frame)?;
-                        segment.instructions.place(IROp::BinaryListOp(
-                            l,
-                            idx_val,
-                            BinaryListOp::IndexRead,
-                        ))
+                        //Need to broadcast this index op
+                        if idx_val.t == IRType::NumberList {
+                            let header = segment.instructions.place(IROp::BeginBroadcast {
+                                inner_type,
+                                end_index: EndIndex::Full,
+                            });
+                            let arg = BroadcastArg {
+                                t: inner_type,
+                                id: 0,
+                            };
+                            segment
+                                .instructions
+                                .push(IROp::SetBroadcastArg(idx_val, arg));
+                            let idx = segment.instructions.place(IROp::LoadBroadcastArg(arg));
+                            let indexed = segment.instructions.place(IROp::BinaryListOp(
+                                l,
+                                idx,
+                                BinaryListOp::IndexRead,
+                            ));
+                            segment.instructions.push(IROp::EndBroadcast {
+                                begin: header,
+                                ret: indexed,
+                            });
+                            header
+                        } else {
+                            segment.instructions.place(IROp::BinaryListOp(
+                                l,
+                                idx_val,
+                                BinaryListOp::IndexRead,
+                            ))
+                        }
                     }
                 }
             }
@@ -328,6 +356,7 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
                 ListOp::Unique => todo!(),
                 ListOp::Sort => todo!(),
                 ListOp::Shuffle => todo!(),
+                //Welcome to hell
                 ListOp::Random => {
                     let mut it = v.iter();
                     if let Some(first) = it.next() {

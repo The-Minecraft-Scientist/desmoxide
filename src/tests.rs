@@ -20,7 +20,8 @@ fn test_compile() {
     let exprs = get_exprs(&graph);
     let mut p = parse_graph_exprs(&exprs);
     let mut f = Frontend { ctx: &p };
-    dbg!(f.direct_compile_fn("s_{implex4D}"));
+    let val = f.direct_compile_fn("s_{implex4D}").unwrap();
+    val.instructions.debug_print(val.ret.unwrap()).unwrap();
 }
 fn parse_graph_exprs<'a>(exprs: &'a HashMap<u32, &'a str>) -> Expressions<'a> {
     let mut p = Expressions::new(exprs);
