@@ -44,8 +44,8 @@ impl<'a> Expressions<'a> {
         ))))
     }
     pub fn ident_ast(&self, i: &str) -> Result<&AST<'a>> {
-        dbg!(&self.meta);
-        let idx = self.fn_ident_id(i)?;
+        let idx = self.ident_id(i)?;
+        dbg!(idx);
         Ok(self
             .meta
             .get(&idx)
@@ -71,8 +71,15 @@ impl<'a> Expressions<'a> {
         bail!("Tried to get function AST of a non-function Ident")
     }
     pub fn fn_ident_id(&self, i: &str) -> Result<u32> {
+        dbg!(&self.fn_lookup);
         Ok(*self
             .fn_lookup
+            .get(i)
+            .context(format!("could not find Function {}", i))?)
+    }
+    pub fn ident_id(&self, i: &str) -> Result<u32> {
+        Ok(*self
+            .ident_lookup
             .get(i)
             .context(format!("could not find Ident {}", i))?)
     }
@@ -103,6 +110,7 @@ impl<'a> Expressions<'a> {
                                     break None;
                                 }
                                 lexer.catch_up();
+                                self.fn_lookup.insert(first.0, idx);
                                 break Some(ExpressionType::Fn {
                                     name: first.0.into(),
                                     params: argv,

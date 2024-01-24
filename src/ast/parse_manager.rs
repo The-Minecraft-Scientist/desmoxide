@@ -151,7 +151,6 @@ impl<'a> ParseManager<'a> {
                 self.parse_placed(*Opcode::Neg.prefix_bp()?)?,
                 super::UnaryOp::Neg,
             ),
-            // TODO: piecewise functions
             Token::LGroup => {
                 if self.lexer.peek_next_res()?.1 == Token::RGroup {
                     self.lexer.discard()?;

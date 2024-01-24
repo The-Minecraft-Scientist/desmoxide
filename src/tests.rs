@@ -20,13 +20,13 @@ fn test_compile() {
     let exprs = get_exprs(&graph);
     let mut p = parse_graph_exprs(&exprs);
     let mut f = Frontend { ctx: &p };
-    dbg!(f.compile_expr(p.ident_ast("t").unwrap()));
+    dbg!(f.direct_compile_fn("s_{implex4D}"));
 }
 fn parse_graph_exprs<'a>(exprs: &'a HashMap<u32, &'a str>) -> Expressions<'a> {
     let mut p = Expressions::new(exprs);
     let v = p.bench_test().unwrap();
     if v.len() > 0 {
-        println!("test failed to parse the following expressions: {:?}", v);
+        eprintln!("test failed to parse the following expressions: {:?}", v);
         panic!();
     }
     p
