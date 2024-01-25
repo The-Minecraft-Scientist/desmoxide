@@ -54,7 +54,7 @@ impl DisjointSetRaw {
     pub unsafe fn parent_cell_unchecked(&self, elem: usize) -> &Cell<usize> {
         #[cfg(not(debug_assertions))]
         {
-            self.parents.get_unchecked(elem as usize).get()
+            self.parents.get_unchecked(elem as usize)
         }
 
         #[cfg(debug_assertions)]
@@ -91,7 +91,7 @@ impl DisjointSetRaw {
     pub unsafe fn rank_unchecked(&self, elem: usize) -> &Cell<u8> {
         #[cfg(not(debug_assertions))]
         {
-            self.ranks.get_unchecked(elem as usize).get()
+            self.ranks.get_unchecked(elem as usize)
         }
 
         #[cfg(debug_assertions)]

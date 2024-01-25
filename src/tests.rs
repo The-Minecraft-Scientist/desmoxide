@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Instant};
 
 use crate::{
     ast::parser::Expressions,
@@ -20,8 +20,17 @@ fn test_compile() {
     let exprs = get_exprs(&graph);
     let mut p = parse_graph_exprs(&exprs);
     let mut f = Frontend { ctx: &p };
+    let t = Instant::now();
     let val = f.direct_compile_fn("s_{implex4D}").unwrap();
-    val.instructions.debug_print(val.ret.unwrap()).unwrap();
+    //val.instructions.debug_print(val.ret.unwrap()).unwrap();
+    dbg!(val.instructions.len());
+    println!(
+        "done in {:?} microseconds",
+        Instant::now()
+            .checked_duration_since(t)
+            .unwrap()
+            .as_micros()
+    );
 }
 fn parse_graph_exprs<'a>(exprs: &'a HashMap<u32, &'a str>) -> Expressions<'a> {
     let mut p = Expressions::new(exprs);

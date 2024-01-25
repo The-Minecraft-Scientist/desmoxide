@@ -280,24 +280,23 @@ impl IROp {
 
 #[derive(Debug, Clone)]
 pub struct IRInstructionSeq {
-    backing: BTreeMap<Id, IROp>,
+    backing: Vec<IROp>,
 }
 impl IRInstructionSeq {
     pub fn new() -> Self {
         Self {
-            backing: BTreeMap::new(),
+            backing: Vec::new(),
         }
+    }
+    pub fn len(&self) -> usize {
+        self.backing.len()
     }
     pub fn push(&mut self, op: IROp) {
         let _ = self.place(op);
     }
     pub fn place(&mut self, op: IROp) -> Id {
-        let mut nid = 0;
-        if let Some(v) = self.backing.last_key_value() {
-            nid = v.0.idx + 1;
-        };
-        let id = Id::new(nid, op.type_of());
-        self.backing.insert(id, op);
+        let id = Id::new(self.backing.len() as u32, op.type_of());
+        self.backing.push(op);
         id
     }
     pub fn coordinates_of2d(&mut self, point: Id) -> (Id, Id) {
@@ -325,12 +324,13 @@ impl IRInstructionSeq {
         }
     }
     pub fn get(&self, id: &Id) -> Result<&IROp> {
-        self.backing.get(id).context("Could not get IR opcode")
+        self.backing
+            .get(id.idx as usize)
+            .context("Could not get IR opcode")
     }
     pub fn latest(&self) -> Result<&IROp> {
         self.backing
-            .last_key_value()
-            .map(|a| a.1)
+            .last()
             .context("called latest on empty InstructionSeq")
     }
     pub fn recursive_dbg(&self, builder: &mut TreeBuilder, node: Id) -> Result<()> {
@@ -376,10 +376,10 @@ impl IRInstructionSeq {
                 return Ok(());
             }
             IROp::ListLit(val) => {
-                let mut it = self.backing.range(node..);
+                let mut it = self.backing[(node.idx as usize)..].iter();
                 let b = builder.add_branch("List Literal");
                 loop {
-                    if let Some((_, IROp::ListLit(val))) = it.next() {
+                    if let Some(IROp::ListLit(val)) = it.next() {
                         self.recursive_dbg(builder, *val)?;
                     } else {
                         break;
@@ -408,10 +408,10 @@ impl IRInstructionSeq {
             } => {
                 let outer = builder.add_branch("Broadcast");
                 let mut args = builder.add_branch("with args:");
-                let mut it = self.backing.range(node..);
+                let mut it = self.backing[node.idx as usize..].iter();
                 it.next().discard();
                 loop {
-                    if let Some((_, IROp::SetBroadcastArg(val, id))) = it.next() {
+                    if let Some(IROp::SetBroadcastArg(val, id)) = it.next() {
                         self.recursive_dbg(builder, *val)?;
                     } else {
                         break;
@@ -419,9 +419,8 @@ impl IRInstructionSeq {
                 }
                 args.release();
                 let end = it
-                    .find(|a| matches!(a.1, IROp::EndBroadcast { begin, .. } if *begin == node))
-                    .unwrap()
-                    .1;
+                    .find(|a| matches!(a, IROp::EndBroadcast { begin, .. } if *begin == node))
+                    .unwrap();
                 let IROp::EndBroadcast { begin, ret } = end else {
                     panic!("unreachable");
                 };
@@ -454,7 +453,7 @@ impl IRInstructionSeq {
             IROp::Comparison { lhs, comp, rhs } => named_branch!(n, comp.as_ref(), lhs, rhs),
             //This must address Inner/End Piecewises as well
             IROp::BeginPiecewise { comp, res } => {
-                let mut it = self.backing.range(node..);
+                let mut it = self.backing[node.idx as usize..].iter();
                 it.next().discard();
                 let b = builder.add_branch("Piecewise");
                 let mut b0 = builder.add_branch("");
@@ -467,7 +466,7 @@ impl IRInstructionSeq {
                 b0.release();
                 let last = loop {
                     let next = it.next();
-                    let Some((_, IROp::InnerPiecewise { comp, res })) = next else {
+                    let Some(IROp::InnerPiecewise { comp, res }) = next else {
                         break next;
                     };
                     let mut b0 = builder.add_branch("");
@@ -480,7 +479,7 @@ impl IRInstructionSeq {
                     b0.release();
                 };
                 //TODO: EndPiecewise needs to track corresponding BeginPiecewise
-                let Some((_, IROp::EndPiecewise { default })) = last else {
+                let Some(IROp::EndPiecewise { default }) = last else {
                     bail!("Piecewise without an EndPiecewise!!");
                 };
                 let mut b5 = builder.add_branch("else");
@@ -490,10 +489,10 @@ impl IRInstructionSeq {
             }
             IROp::FnCall(f) => {
                 let b = builder.add_branch(&format!("Function call (id {})", f.0));
-                let mut it = self.backing.range(node..);
+                let mut it = self.backing[node.idx as usize..].iter();
                 it.next().discard();
                 loop {
-                    if let Some((_, IROp::FnArg(val))) = it.next() {
+                    if let Some(IROp::FnArg(val)) = it.next() {
                         self.recursive_dbg(builder, *val)?;
                     } else {
                         break;
