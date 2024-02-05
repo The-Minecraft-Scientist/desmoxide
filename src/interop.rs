@@ -31,18 +31,12 @@ pub struct GraphState {
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Expressions {
-    list: Vec<Expression>,
+    pub list: Vec<Expression>,
 }
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct GraphMeta {
     viewport: ViewportMeta,
-    show_grid: bool,
-    show_x_axis: bool,
-    show_y_axis: bool,
-    x_axis_numbers: bool,
-    y_axis_numbers: bool,
-    polar_numbers: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]

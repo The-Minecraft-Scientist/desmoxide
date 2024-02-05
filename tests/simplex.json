@@ -1,688 +1,679 @@
 {
-    "hash": "j0kjqlb1ju",
-    "parent_hash": "rbhd4iqr2v",
-    "thumbUrl": "https://www.desmos.com/calc_thumbs/production/j0kjqlb1ju.png",
-    "stateUrl": "https://www.desmos.com/calc-states/production/j0kjqlb1ju",
-    "title": "implicit 4D Simplex Noise",
-    "access": "link",
-    "created": "Fri, 08 Dec 2023 17:56:07 GMT",
-    "state": {
-        "version": 11,
-        "randomSeed": "0da519e6c6d3ae2dad5c22723c166349",
-        "graph": {
-            "viewport": {
-                "xmin": -39.98625578703704,
-                "ymin": -25.471942699366515,
-                "xmax": 40.01374421296295,
-                "ymax": 25.89873668084801
-            },
-            "showGrid": false,
-            "showXAxis": false,
-            "showYAxis": false,
-            "xAxisNumbers": false,
-            "yAxisNumbers": false,
-            "polarNumbers": false
+    "version": 11,
+    "randomSeed": "0da519e6c6d3ae2dad5c22723c166349",
+    "graph": {
+        "viewport": {
+            "xmin": -39.98625578703704,
+            "ymin": -25.471942699366515,
+            "xmax": 40.01374421296295,
+            "ymax": 25.89873668084801
         },
-        "expressions": {
-            "list": [
-                {
-                    "type": "text",
-                    "id": "476",
-                    "text": "4D simplex noise: based on the Java implementation here:\nhttps://weber.itn.liu.se/~stegu/simplexnoise/simplexnoise.pdf \n(that paper also has an excellent explanation of the concepts behind simplex noise)"
-                },
-                {
-                    "type": "text",
-                    "id": "473",
-                    "text": "constants to skew coordinates for 4D"
-                },
-                {
-                    "type": "expression",
-                    "id": "18",
-                    "color": "#c74440",
-                    "latex": "F=\\frac{\\sqrt{5}-1}{4}"
-                },
-                {
-                    "type": "expression",
-                    "id": "19",
-                    "color": "#2d70b3",
-                    "latex": "G=\\frac{1-\\frac{1}{\\sqrt{5}}}{4}"
-                },
-                {
-                    "type": "text",
-                    "id": "477",
-                    "text": "4D gradients"
-                },
-                {
-                    "type": "expression",
-                    "id": "6",
-                    "color": "#c74440",
-                    "latex": "g_{X0}=[0,0,0,0,0,0,0,0,1,1,1,1,-1,-1,-1,-1,1,1,1,1,-1,-1,-1,-1,1,1,1,1,-1,-1,-1,-1]"
-                },
-                {
-                    "type": "expression",
-                    "id": "7",
-                    "color": "#2d70b3",
-                    "latex": "g_{Y0}=[1,1,1,1,-1,-1,-1,-1,0,0,0,0,0,0,0,0,1,1,-1,-1,1,1,-1,-1,1,1,-1,-1,1,1,-1,-1]"
-                },
-                {
-                    "type": "expression",
-                    "id": "8",
-                    "color": "#388c46",
-                    "latex": "g_{Z0}=[1,1,-1,-1,1,1,-1,-1,1,1,-1,-1,1,1,-1,-1,0,0,0,0,0,0,0,0,1,-1,1,-1,1,-1,1,-1]"
-                },
-                {
-                    "type": "expression",
-                    "id": "9",
-                    "color": "#6042a6",
-                    "latex": "g_{W0}=[1,-1,1,-1,1,-1,1,-1,1,-1,1,-1,1,-1,1,-1,1,-1,1,-1,1,-1,1,-1,0,0,0,0,0,0,0,0]"
-                },
-                {
-                    "type": "text",
-                    "id": "479",
-                    "text": "randomly pick a gradient 10k times to get a decent pool of randomness"
-                },
-                {
-                    "type": "expression",
-                    "id": "170",
-                    "color": "#2d70b3",
-                    "latex": "g_{X}=g_{X0}\\left[\\operatorname{ceil}\\left(32\\cdot\\operatorname{random}\\left(10000\\right)\\right)\\right]"
-                },
-                {
-                    "type": "expression",
-                    "id": "171",
-                    "color": "#2d70b3",
-                    "latex": "g_{Y}=g_{Y0}\\left[\\operatorname{ceil}\\left(32\\operatorname{random}\\left(10000\\right)\\right)\\right]"
-                },
-                {
-                    "type": "expression",
-                    "id": "172",
-                    "color": "#2d70b3",
-                    "latex": "g_{Z}=g_{Z0}\\left[\\operatorname{ceil}\\left(32\\operatorname{random}\\left(10000\\right)\\right)\\right]"
-                },
-                {
-                    "type": "expression",
-                    "id": "169",
-                    "color": "#2d70b3",
-                    "latex": "g_{W}=g_{W0}\\left[\\operatorname{ceil}\\left(32\\operatorname{random}\\left(10000\\right)\\right)\\right]"
-                },
-                {
-                    "type": "text",
-                    "id": "481",
-                    "text": "LUT used to determine the coordinate traversal taken by which subdivision we are in"
-                },
-                {
-                    "type": "expression",
-                    "id": "14",
-                    "color": "#2d70b3",
-                    "latex": "l_{utX}=[0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1,0,1,0,0,0,2,2,1,1,0,0,0,2,0,2,0,0,0,0,0,0,0,0,2,0,0,0,3,3,0,3,2,0,0,0,3,0,3,3]"
-                },
-                {
-                    "type": "expression",
-                    "id": "15",
-                    "color": "#388c46",
-                    "latex": "l_{utY}=[1,1,0,2,0,0,0,2,2,0,3,3,0,0,0,3,0,0,0,0,0,0,0,0,2,0,3,0,0,0,3,3,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,1,0,2,2]"
-                },
-                {
-                    "type": "expression",
-                    "id": "16",
-                    "color": "#6042a6",
-                    "latex": "l_{utZ}=[2,3,0,3,0,0,0,3,1,0,1,2,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,3,0,0,0,3,0,3,0,0,0,0,0,0,0,0,1,0,0,0,1,2,0,2,0,0,0,0,0,0,0,1]"
-                },
-                {
-                    "type": "expression",
-                    "id": "17",
-                    "color": "#000000",
-                    "latex": "l_{utW}=[3,2,0,1,0,0,0,0,3,0,2,1,0,0,0,0,0,0,0,0,0,0,0,0,3,0,2,0,0,0,1,0,3,2,0,0,0,1,0,0,0,0,0,0,0,0,0,0,3,0,0,0,2,1,0,0,3,0,0,0,2,0,1,0]"
-                },
-                {
-                    "type": "text",
-                    "id": "483",
-                    "text": "Wolfram's simple pairing function used for converting 4d integer positions into gradient list indices"
-                },
-                {
-                    "type": "expression",
-                    "id": "418",
-                    "color": "#c74440",
-                    "latex": "d_{pair}\\left(x,y\\right)=\\left\\{x=\\max\\left(x,y\\right):y^{2}+x,x^{2}+x+y\\right\\}"
-                },
-                {
-                    "type": "text",
-                    "id": "485",
-                    "text": "create a single unique integer from 4 integers"
-                },
-                {
-                    "type": "expression",
-                    "id": "419",
-                    "color": "#2d70b3",
-                    "latex": "q_{pair}\\left(x,y,z,w\\right)=d_{pair}\\left(x,d_{pair}\\left(w,d_{pair}\\left(z,y\\right)\\right)\\right)"
-                },
-                {
-                    "type": "text",
-                    "id": "487",
-                    "text": "dot product of the input delta and gradient"
-                },
-                {
-                    "type": "expression",
-                    "id": "449",
-                    "color": "#388c46",
-                    "latex": "d_{ot}=x_{d}g_{X}\\left[g_{ind}\\right]+y_{d}g_{Y}\\left[g_{ind}\\right]+z_{d}g_{Z}\\left[g_{ind}\\right]+w_{d}g_{W}\\left[g_{ind}\\right]",
-                    "labelSize": "1"
-                },
-                {
-                    "type": "text",
-                    "id": "489",
-                    "text": "0.5-the magnitude of the delta vector to"
-                },
-                {
-                    "type": "expression",
-                    "id": "450",
-                    "color": "#6042a6",
-                    "latex": "r_{2}=0.5-x_{d}x_{d}-y_{d}y_{d}-z_{d}z_{d}-w_{d}w_{d}"
-                },
-                {
-                    "type": "text",
-                    "id": "491",
-                    "text": "max(0,r^2)^4*dot(grad,delta)"
-                },
-                {
-                    "type": "expression",
-                    "id": "448",
-                    "color": "#2d70b3",
-                    "latex": "p_{roc}\\left(x_{d},y_{d},z_{d},w_{d},g_{ind}\\right)=\\left\\{r_{2}>0:r_{2}^{4}d_{ot},0\\right\\}"
-                },
-                {
-                    "type": "text",
-                    "id": "493",
-                    "text": "skew input coordinates and determine the skewed coordinates of the origin of the simplex the input lies in"
-                },
-                {
-                    "type": "expression",
-                    "id": "223",
-                    "color": "#c74440",
-                    "latex": "s=\\left(x+y+z+w\\right)\\cdot F",
-                    "labelSize": "1"
-                },
-                {
-                    "type": "expression",
-                    "id": "224",
-                    "color": "#2d70b3",
-                    "latex": "i=\\operatorname{floor}\\left(x+s\\right)",
-                    "labelSize": "1"
-                },
-                {
-                    "type": "expression",
-                    "id": "227",
-                    "color": "#2d70b3",
-                    "latex": "j=\\operatorname{floor}\\left(y+s\\right)",
-                    "labelSize": "1"
-                },
-                {
-                    "type": "expression",
-                    "id": "226",
-                    "color": "#2d70b3",
-                    "latex": "k=\\operatorname{floor}\\left(z+s\\right)",
-                    "labelSize": "1"
-                },
-                {
-                    "type": "expression",
-                    "id": "225",
-                    "color": "#2d70b3",
-                    "latex": "l=\\operatorname{floor}\\left(w+s\\right)",
-                    "labelSize": "1"
-                },
-                {
-                    "type": "text",
-                    "id": "494",
-                    "text": "unskew the origin coordinates back into normal space"
-                },
-                {
-                    "type": "expression",
-                    "id": "229",
-                    "color": "#6042a6",
-                    "latex": "t=\\left(i+j+k+l\\right)\\cdot G"
-                },
-                {
-                    "type": "expression",
-                    "id": "230",
-                    "color": "#000000",
-                    "latex": "X_{0}=i-t"
-                },
-                {
-                    "type": "expression",
-                    "id": "233",
-                    "color": "#000000",
-                    "latex": "Y_{0}=j-t"
-                },
-                {
-                    "type": "expression",
-                    "id": "232",
-                    "color": "#000000",
-                    "latex": "Z_{0}=k-t"
-                },
-                {
-                    "type": "expression",
-                    "id": "231",
-                    "color": "#000000",
-                    "latex": "W_{0}=l-t"
-                },
-                {
-                    "type": "text",
-                    "id": "495",
-                    "text": "determine the first set of deltas (the vector from the input point to the simplex vertex of interest (which in this case is always the origin)"
-                },
-                {
-                    "type": "expression",
-                    "id": "234",
-                    "color": "#c74440",
-                    "latex": "x_{0}=x-X_{0}"
-                },
-                {
-                    "type": "expression",
-                    "id": "269",
-                    "color": "#c74440",
-                    "latex": "y_{0}=y-Y_{0}"
-                },
-                {
-                    "type": "expression",
-                    "id": "268",
-                    "color": "#c74440",
-                    "latex": "z_{0}=z-Z_{0}"
-                },
-                {
-                    "type": "expression",
-                    "id": "267",
-                    "color": "#c74440",
-                    "latex": "w_{0}=w-W_{0}"
-                },
-                {
-                    "type": "expression",
-                    "id": "270",
-                    "color": "#2d70b3"
-                },
-                {
-                    "type": "text",
-                    "id": "236",
-                    "text": "use an LUT to automagically determine the simplex traversal order"
-                },
-                {
-                    "type": "expression",
-                    "id": "237",
-                    "color": "#000000",
-                    "latex": "c_{1}=\\left\\{x_{0}\\ge y_{0}:32,0\\right\\}"
-                },
-                {
-                    "type": "expression",
-                    "id": "238",
-                    "color": "#000000",
-                    "latex": "c_{2}=\\left\\{x_{0}\\ge z_{0}:16,0\\right\\}"
-                },
-                {
-                    "type": "expression",
-                    "id": "239",
-                    "color": "#000000",
-                    "latex": "c_{3}=\\left\\{y_{0}\\ge z_{0}:8,0\\right\\}"
-                },
-                {
-                    "type": "expression",
-                    "id": "240",
-                    "color": "#000000",
-                    "latex": "c_{4}=\\left\\{x_{0}\\ge w_{0}:4,0\\right\\}"
-                },
-                {
-                    "type": "expression",
-                    "id": "241",
-                    "color": "#000000",
-                    "latex": "c_{5}=\\left\\{y_{0}\\ge w_{0}:2,0\\right\\}"
-                },
-                {
-                    "type": "expression",
-                    "id": "242",
-                    "color": "#000000",
-                    "latex": "c_{6}=\\left\\{z_{0}\\ge w_{0}:1,0\\right\\}"
-                },
-                {
-                    "type": "text",
-                    "id": "497",
-                    "text": "we add one since this LUT was designed for 0-indexed arrays (e.g. in Java or C++)"
-                },
-                {
-                    "type": "expression",
-                    "id": "243",
-                    "color": "#c74440",
-                    "latex": "c=c_{1}+c_{2}+c_{3}+c_{4}+c_{5}+c_{6}+1"
-                },
-                {
-                    "type": "text",
-                    "id": "244",
-                    "text": "use the LUT to figure out the 2nd smallest simplex vertex (the smallest one is (0,0,0,0) or the origin"
-                },
-                {
-                    "type": "expression",
-                    "id": "245",
-                    "color": "#c74440",
-                    "latex": "i_{1}=\\left\\{l_{utX}\\left[c\\right]\\ge3:1,0\\right\\}"
-                },
-                {
-                    "type": "expression",
-                    "id": "246",
-                    "color": "#c74440",
-                    "latex": "j_{1}=\\left\\{l_{utY}\\left[c\\right]\\ge3:1,0\\right\\}"
-                },
-                {
-                    "type": "expression",
-                    "id": "247",
-                    "color": "#c74440",
-                    "latex": "k_{1}=\\left\\{l_{utZ}\\left[c\\right]\\ge3:1,0\\right\\}"
-                },
-                {
-                    "type": "expression",
-                    "id": "248",
-                    "color": "#c74440",
-                    "latex": "l_{1}=\\left\\{l_{utW}\\left[c\\right]\\ge3:1,0\\right\\}"
-                },
-                {
-                    "type": "text",
-                    "id": "249",
-                    "text": "3rd smallest"
-                },
-                {
-                    "type": "expression",
-                    "id": "250",
-                    "color": "#c74440",
-                    "latex": "i_{2}=\\left\\{l_{utX}\\left[c\\right]\\ge2:1,0\\right\\}"
-                },
-                {
-                    "type": "expression",
-                    "id": "251",
-                    "color": "#c74440",
-                    "latex": "j_{2}=\\left\\{l_{utY}\\left[c\\right]\\ge2:1,0\\right\\}"
-                },
-                {
-                    "type": "expression",
-                    "id": "252",
-                    "color": "#c74440",
-                    "latex": "k_{2}=\\left\\{l_{utZ}\\left[c\\right]\\ge2:1,0\\right\\}"
-                },
-                {
-                    "type": "expression",
-                    "id": "253",
-                    "color": "#c74440",
-                    "latex": "l_{2}=\\left\\{l_{utW}\\left[c\\right]\\ge2:1,0\\right\\}"
-                },
-                {
-                    "type": "text",
-                    "id": "254",
-                    "text": "4th smallest (the 5th \"smallest\" vertex is always (1,1,1,1) in simplex-local coordinates)"
-                },
-                {
-                    "type": "expression",
-                    "id": "255",
-                    "color": "#c74440",
-                    "latex": "i_{3}=\\left\\{l_{utX}\\left[c\\right]\\ge1:1,0\\right\\}"
-                },
-                {
-                    "type": "expression",
-                    "id": "256",
-                    "color": "#c74440",
-                    "latex": "j_{3}=\\left\\{l_{utY}\\left[c\\right]\\ge1:1,0\\right\\}"
-                },
-                {
-                    "type": "expression",
-                    "id": "257",
-                    "color": "#c74440",
-                    "latex": "k_{3}=\\left\\{l_{utZ}\\left[c\\right]\\ge1:1,0\\right\\}"
-                },
-                {
-                    "type": "expression",
-                    "id": "258",
-                    "color": "#c74440",
-                    "latex": "l_{3}=\\left\\{l_{utW}\\left[c\\right]\\ge1:1,0\\right\\}"
-                },
-                {
-                    "type": "text",
-                    "id": "498",
-                    "text": "\"hash\" skewed origin + vertex positions into indices for the gradient lists"
-                },
-                {
-                    "type": "expression",
-                    "id": "259",
-                    "color": "#2d70b3",
-                    "latex": "g_{i0}=\\operatorname{mod}\\left(q_{pair}\\left(i,j,k,l\\right),9999\\right)+1"
-                },
-                {
-                    "type": "expression",
-                    "id": "260",
-                    "color": "#2d70b3",
-                    "latex": "g_{i1}=\\operatorname{mod}\\left(q_{pair}\\left(i+i_{1},j+j_{1},k+k_{1},l+l_{1}\\right),9999\\right)+1"
-                },
-                {
-                    "type": "expression",
-                    "id": "261",
-                    "color": "#2d70b3",
-                    "latex": "g_{i2}=\\operatorname{mod}\\left(q_{pair}\\left(i+i_{2},j+j_{2},k+k_{2},l+l_{2}\\right),9999\\right)+1"
-                },
-                {
-                    "type": "expression",
-                    "id": "262",
-                    "color": "#2d70b3",
-                    "latex": "g_{i3}=\\operatorname{mod}\\left(q_{pair}\\left(i+i_{3},j+j_{3},k+k_{3},l+l_{3}\\right),9999\\right)+1"
-                },
-                {
-                    "type": "expression",
-                    "id": "263",
-                    "color": "#2d70b3",
-                    "latex": "g_{i4}=\\operatorname{mod}\\left(q_{pair}\\left(i+1,j+1,k+1,l+1\\right),9999\\right)+1"
-                },
-                {
-                    "type": "text",
-                    "id": "443",
-                    "text": "vector from the 2nd smallest vertex to the input point"
-                },
-                {
-                    "type": "expression",
-                    "id": "422",
-                    "color": "#000000",
-                    "latex": "x_{1}=x_{0}-i_{1}+G"
-                },
-                {
-                    "type": "expression",
-                    "id": "425",
-                    "color": "#000000",
-                    "latex": "y_{1}=y_{0}-j_{1}+G"
-                },
-                {
-                    "type": "expression",
-                    "id": "424",
-                    "color": "#000000",
-                    "latex": "z_{1}=z_{0}-k_{1}+G"
-                },
-                {
-                    "type": "expression",
-                    "id": "423",
-                    "color": "#000000",
-                    "latex": "w_{1}=w_{0}-l_{1}+G"
-                },
-                {
-                    "type": "text",
-                    "id": "500",
-                    "text": "vector from the 3rd smallest vertex to the input point"
-                },
-                {
-                    "type": "expression",
-                    "id": "439",
-                    "color": "#000000",
-                    "latex": "x_{2}=x_{0}-i_{2}+2G"
-                },
-                {
-                    "type": "expression",
-                    "id": "440",
-                    "color": "#000000",
-                    "latex": "y_{2}=y_{0}-j_{2}+2G"
-                },
-                {
-                    "type": "expression",
-                    "id": "441",
-                    "color": "#000000",
-                    "latex": "z_{2}=z_{0}-k_{2}+2G"
-                },
-                {
-                    "type": "expression",
-                    "id": "442",
-                    "color": "#000000",
-                    "latex": "w_{2}=w_{0}-l_{2}+2G"
-                },
-                {
-                    "type": "text",
-                    "id": "502",
-                    "text": "vector from the 4th smallest vertex to the input point"
-                },
-                {
-                    "type": "expression",
-                    "id": "434",
-                    "color": "#000000",
-                    "latex": "x_{3}=x_{0}-i_{3}+3G"
-                },
-                {
-                    "type": "expression",
-                    "id": "435",
-                    "color": "#000000",
-                    "latex": "y_{3}=y_{0}-j_{3}+3G"
-                },
-                {
-                    "type": "expression",
-                    "id": "436",
-                    "color": "#000000",
-                    "latex": "z_{3}=z_{0}-k_{3}+3G"
-                },
-                {
-                    "type": "expression",
-                    "id": "437",
-                    "color": "#000000",
-                    "latex": "w_{3}=w_{0}-l_{3}+3G"
-                },
-                {
-                    "type": "text",
-                    "id": "504",
-                    "text": "vector from the largest vertex (which is always (1,1,1,1)) to the input point"
-                },
-                {
-                    "type": "expression",
-                    "id": "429",
-                    "color": "#000000",
-                    "latex": "x_{4}=x_{0}-1+4G"
-                },
-                {
-                    "type": "expression",
-                    "id": "430",
-                    "color": "#000000",
-                    "latex": "y_{4}=y_{0}-1+4G"
-                },
-                {
-                    "type": "expression",
-                    "id": "431",
-                    "color": "#000000",
-                    "latex": "z_{4}=z_{0}-1+4G"
-                },
-                {
-                    "type": "expression",
-                    "id": "432",
-                    "color": "#000000",
-                    "latex": "w_{4}=w_{0}-1+4G"
-                },
-                {
-                    "type": "text",
-                    "id": "506",
-                    "text": "compute max(0,0.5-dot(p,p))^4*dot(p,grad)\nwhere p is the unskewed vector from this vertex to the input point and grad is a (pseudo) randomly selected gradient vector from the lists in the \"data\" folder"
-                },
-                {
-                    "type": "expression",
-                    "id": "452",
-                    "color": "#c74440",
-                    "latex": "t_{0}=p_{roc}\\left(x_{0},y_{0},z_{0},w_{0},g_{i0}\\right)",
-                    "labelSize": "1"
-                },
-                {
-                    "type": "expression",
-                    "id": "463",
-                    "color": "#c74440",
-                    "latex": "t_{1}=p_{roc}\\left(x_{1},y_{1},z_{1},w_{1},g_{i1}\\right)",
-                    "labelSize": "1"
-                },
-                {
-                    "type": "expression",
-                    "id": "462",
-                    "color": "#c74440",
-                    "latex": "t_{2}=p_{roc}\\left(x_{2},y_{2},z_{2},w_{2},g_{i2}\\right)",
-                    "labelSize": "1"
-                },
-                {
-                    "type": "expression",
-                    "id": "461",
-                    "color": "#c74440",
-                    "latex": "t_{3}=p_{roc}\\left(x_{3},y_{3},z_{3},w_{3},g_{i3}\\right)",
-                    "labelSize": "1"
-                },
-                {
-                    "type": "expression",
-                    "id": "460",
-                    "color": "#c74440",
-                    "latex": "t_{4}=p_{roc}\\left(x_{4},y_{4},z_{4},w_{4},g_{i4}\\right)",
-                    "labelSize": "1"
-                },
-                {
-                    "type": "text",
-                    "id": "508",
-                    "text": "sum the contributions from each kernel and scale to lie between 0 and 1"
-                },
-                {
-                    "type": "expression",
-                    "id": "453",
-                    "color": "#2d70b3",
-                    "latex": "s_{implex4D}\\left(x,y,z,w\\right)=\\frac{27}{2}\\left(t_{0}+t_{1}+t_{2}+t_{3}+t_{4}\\right)+\\frac{1}{2}"
-                },
-                {
-                    "type": "expression",
-                    "id": "509",
-                    "color": "#c74440"
-                },
-                {
-                    "type": "text",
-                    "id": "511",
-                    "text": "everything past this is for the visuals"
-                },
-                {
-                    "type": "expression",
-                    "id": "467",
-                    "color": "#2d70b3",
-                    "latex": "o_{pacities}=\\left[0.0154384130092,0.0306574358339,0.0604142103936,0.117304240087,0.221196250277,0.394349728052,0.635097400392,0.868953730005\\right]"
-                },
-                {
-                    "type": "expression",
-                    "id": "470",
-                    "color": "#000000",
-                    "latex": "l_{ayerStates}\\left(v_{alue}\\right)=\\operatorname{floor}\\left(\\frac{\\operatorname{mod}\\left(255\\left(\\left(\\frac{-\\min\\left(\\max\\left(v_{alue},\\frac{4}{255}\\right),1\\right)-0.01132797019}{-4.5222254367\\cdot10^{12}}\\right)^{-0.0528100288134}-4.65506661293\\right),2^{\\left[1...8\\right]}\\right)}{2^{\\left[0...7\\right]}}\\right)",
-                    "hidden": true
-                },
-                {
-                    "type": "expression",
-                    "id": "471",
-                    "color": "#000000",
-                    "latex": "l_{ayerStates}\\left(s_{implex4D}\\left(x,y,a,4\\right)\\right)>\\frac{1}{2}",
-                    "fillOpacity": "o_{pacities}"
-                },
-                {
-                    "type": "expression",
-                    "id": "513",
-                    "color": "#c74440",
-                    "latex": "a=0"
-                },
-                {
-                    "type": "expression",
-                    "id": "514",
-                    "color": "#c74440",
-                    "latex": "\\frac{\\sqrt[\\left\\{\\right\\}]{\\left\\{\\right\\}^{\\left\\{\\right\\}}}}{\\left[\\left\\{\\right\\}+\\left\\{\\right\\}\\right]}\\left[\\left\\{\\right\\}=\\left\\{\\right\\}\\right]\\left[\\left\\{\\right\\}\\right]"
-                }
-            ]
-        }
+        "showGrid": false,
+        "showXAxis": false,
+        "showYAxis": false,
+        "xAxisNumbers": false,
+        "yAxisNumbers": false,
+        "polarNumbers": false
+    },
+    "expressions": {
+        "list": [
+            {
+                "type": "text",
+                "id": "476",
+                "text": "4D simplex noise: based on the Java implementation here:\nhttps://weber.itn.liu.se/~stegu/simplexnoise/simplexnoise.pdf \n(that paper also has an excellent explanation of the concepts behind simplex noise)"
+            },
+            {
+                "type": "text",
+                "id": "473",
+                "text": "constants to skew coordinates for 4D"
+            },
+            {
+                "type": "expression",
+                "id": "18",
+                "color": "#c74440",
+                "latex": "F=\\frac{\\sqrt{5}-1}{4}"
+            },
+            {
+                "type": "expression",
+                "id": "19",
+                "color": "#2d70b3",
+                "latex": "G=\\frac{1-\\frac{1}{\\sqrt{5}}}{4}"
+            },
+            {
+                "type": "text",
+                "id": "477",
+                "text": "4D gradients"
+            },
+            {
+                "type": "expression",
+                "id": "6",
+                "color": "#c74440",
+                "latex": "g_{X0}=[0,0,0,0,0,0,0,0,1,1,1,1,-1,-1,-1,-1,1,1,1,1,-1,-1,-1,-1,1,1,1,1,-1,-1,-1,-1]"
+            },
+            {
+                "type": "expression",
+                "id": "7",
+                "color": "#2d70b3",
+                "latex": "g_{Y0}=[1,1,1,1,-1,-1,-1,-1,0,0,0,0,0,0,0,0,1,1,-1,-1,1,1,-1,-1,1,1,-1,-1,1,1,-1,-1]"
+            },
+            {
+                "type": "expression",
+                "id": "8",
+                "color": "#388c46",
+                "latex": "g_{Z0}=[1,1,-1,-1,1,1,-1,-1,1,1,-1,-1,1,1,-1,-1,0,0,0,0,0,0,0,0,1,-1,1,-1,1,-1,1,-1]"
+            },
+            {
+                "type": "expression",
+                "id": "9",
+                "color": "#6042a6",
+                "latex": "g_{W0}=[1,-1,1,-1,1,-1,1,-1,1,-1,1,-1,1,-1,1,-1,1,-1,1,-1,1,-1,1,-1,0,0,0,0,0,0,0,0]"
+            },
+            {
+                "type": "text",
+                "id": "479",
+                "text": "randomly pick a gradient 10k times to get a decent pool of randomness"
+            },
+            {
+                "type": "expression",
+                "id": "170",
+                "color": "#2d70b3",
+                "latex": "g_{X}=g_{X0}\\left[\\operatorname{ceil}\\left(32\\cdot\\operatorname{random}\\left(10000\\right)\\right)\\right]"
+            },
+            {
+                "type": "expression",
+                "id": "171",
+                "color": "#2d70b3",
+                "latex": "g_{Y}=g_{Y0}\\left[\\operatorname{ceil}\\left(32\\operatorname{random}\\left(10000\\right)\\right)\\right]"
+            },
+            {
+                "type": "expression",
+                "id": "172",
+                "color": "#2d70b3",
+                "latex": "g_{Z}=g_{Z0}\\left[\\operatorname{ceil}\\left(32\\operatorname{random}\\left(10000\\right)\\right)\\right]"
+            },
+            {
+                "type": "expression",
+                "id": "169",
+                "color": "#2d70b3",
+                "latex": "g_{W}=g_{W0}\\left[\\operatorname{ceil}\\left(32\\operatorname{random}\\left(10000\\right)\\right)\\right]"
+            },
+            {
+                "type": "text",
+                "id": "481",
+                "text": "LUT used to determine the coordinate traversal taken by which subdivision we are in"
+            },
+            {
+                "type": "expression",
+                "id": "14",
+                "color": "#2d70b3",
+                "latex": "l_{utX}=[0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1,0,1,0,0,0,2,2,1,1,0,0,0,2,0,2,0,0,0,0,0,0,0,0,2,0,0,0,3,3,0,3,2,0,0,0,3,0,3,3]"
+            },
+            {
+                "type": "expression",
+                "id": "15",
+                "color": "#388c46",
+                "latex": "l_{utY}=[1,1,0,2,0,0,0,2,2,0,3,3,0,0,0,3,0,0,0,0,0,0,0,0,2,0,3,0,0,0,3,3,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,1,0,2,2]"
+            },
+            {
+                "type": "expression",
+                "id": "16",
+                "color": "#6042a6",
+                "latex": "l_{utZ}=[2,3,0,3,0,0,0,3,1,0,1,2,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,3,0,0,0,3,0,3,0,0,0,0,0,0,0,0,1,0,0,0,1,2,0,2,0,0,0,0,0,0,0,1]"
+            },
+            {
+                "type": "expression",
+                "id": "17",
+                "color": "#000000",
+                "latex": "l_{utW}=[3,2,0,1,0,0,0,0,3,0,2,1,0,0,0,0,0,0,0,0,0,0,0,0,3,0,2,0,0,0,1,0,3,2,0,0,0,1,0,0,0,0,0,0,0,0,0,0,3,0,0,0,2,1,0,0,3,0,0,0,2,0,1,0]"
+            },
+            {
+                "type": "text",
+                "id": "483",
+                "text": "Wolfram's simple pairing function used for converting 4d integer positions into gradient list indices"
+            },
+            {
+                "type": "expression",
+                "id": "418",
+                "color": "#c74440",
+                "latex": "d_{pair}\\left(x,y\\right)=\\left\\{x=\\max\\left(x,y\\right):y^{2}+x,x^{2}+x+y\\right\\}"
+            },
+            {
+                "type": "text",
+                "id": "485",
+                "text": "create a single unique integer from 4 integers"
+            },
+            {
+                "type": "expression",
+                "id": "419",
+                "color": "#2d70b3",
+                "latex": "q_{pair}\\left(x,y,z,w\\right)=d_{pair}\\left(x,d_{pair}\\left(w,d_{pair}\\left(z,y\\right)\\right)\\right)"
+            },
+            {
+                "type": "text",
+                "id": "487",
+                "text": "dot product of the input delta and gradient"
+            },
+            {
+                "type": "expression",
+                "id": "449",
+                "color": "#388c46",
+                "latex": "d_{ot}=x_{d}g_{X}\\left[g_{ind}\\right]+y_{d}g_{Y}\\left[g_{ind}\\right]+z_{d}g_{Z}\\left[g_{ind}\\right]+w_{d}g_{W}\\left[g_{ind}\\right]",
+                "labelSize": "1"
+            },
+            {
+                "type": "text",
+                "id": "489",
+                "text": "0.5-the magnitude of the delta vector to"
+            },
+            {
+                "type": "expression",
+                "id": "450",
+                "color": "#6042a6",
+                "latex": "r_{2}=0.5-x_{d}x_{d}-y_{d}y_{d}-z_{d}z_{d}-w_{d}w_{d}"
+            },
+            {
+                "type": "text",
+                "id": "491",
+                "text": "max(0,r^2)^4*dot(grad,delta)"
+            },
+            {
+                "type": "expression",
+                "id": "448",
+                "color": "#2d70b3",
+                "latex": "p_{roc}\\left(x_{d},y_{d},z_{d},w_{d},g_{ind}\\right)=\\left\\{r_{2}>0:r_{2}^{4}d_{ot},0\\right\\}"
+            },
+            {
+                "type": "text",
+                "id": "493",
+                "text": "skew input coordinates and determine the skewed coordinates of the origin of the simplex the input lies in"
+            },
+            {
+                "type": "expression",
+                "id": "223",
+                "color": "#c74440",
+                "latex": "s=\\left(x+y+z+w\\right)\\cdot F",
+                "labelSize": "1"
+            },
+            {
+                "type": "expression",
+                "id": "224",
+                "color": "#2d70b3",
+                "latex": "i=\\operatorname{floor}\\left(x+s\\right)",
+                "labelSize": "1"
+            },
+            {
+                "type": "expression",
+                "id": "227",
+                "color": "#2d70b3",
+                "latex": "j=\\operatorname{floor}\\left(y+s\\right)",
+                "labelSize": "1"
+            },
+            {
+                "type": "expression",
+                "id": "226",
+                "color": "#2d70b3",
+                "latex": "k=\\operatorname{floor}\\left(z+s\\right)",
+                "labelSize": "1"
+            },
+            {
+                "type": "expression",
+                "id": "225",
+                "color": "#2d70b3",
+                "latex": "l=\\operatorname{floor}\\left(w+s\\right)",
+                "labelSize": "1"
+            },
+            {
+                "type": "text",
+                "id": "494",
+                "text": "unskew the origin coordinates back into normal space"
+            },
+            {
+                "type": "expression",
+                "id": "229",
+                "color": "#6042a6",
+                "latex": "t=\\left(i+j+k+l\\right)\\cdot G"
+            },
+            {
+                "type": "expression",
+                "id": "230",
+                "color": "#000000",
+                "latex": "X_{0}=i-t"
+            },
+            {
+                "type": "expression",
+                "id": "233",
+                "color": "#000000",
+                "latex": "Y_{0}=j-t"
+            },
+            {
+                "type": "expression",
+                "id": "232",
+                "color": "#000000",
+                "latex": "Z_{0}=k-t"
+            },
+            {
+                "type": "expression",
+                "id": "231",
+                "color": "#000000",
+                "latex": "W_{0}=l-t"
+            },
+            {
+                "type": "text",
+                "id": "495",
+                "text": "determine the first set of deltas (the vector from the input point to the simplex vertex of interest (which in this case is always the origin)"
+            },
+            {
+                "type": "expression",
+                "id": "234",
+                "color": "#c74440",
+                "latex": "x_{0}=x-X_{0}"
+            },
+            {
+                "type": "expression",
+                "id": "269",
+                "color": "#c74440",
+                "latex": "y_{0}=y-Y_{0}"
+            },
+            {
+                "type": "expression",
+                "id": "268",
+                "color": "#c74440",
+                "latex": "z_{0}=z-Z_{0}"
+            },
+            {
+                "type": "expression",
+                "id": "267",
+                "color": "#c74440",
+                "latex": "w_{0}=w-W_{0}"
+            },
+            {
+                "type": "expression",
+                "id": "270",
+                "color": "#2d70b3"
+            },
+            {
+                "type": "text",
+                "id": "236",
+                "text": "use an LUT to automagically determine the simplex traversal order"
+            },
+            {
+                "type": "expression",
+                "id": "237",
+                "color": "#000000",
+                "latex": "c_{1}=\\left\\{x_{0}\\ge y_{0}:32,0\\right\\}"
+            },
+            {
+                "type": "expression",
+                "id": "238",
+                "color": "#000000",
+                "latex": "c_{2}=\\left\\{x_{0}\\ge z_{0}:16,0\\right\\}"
+            },
+            {
+                "type": "expression",
+                "id": "239",
+                "color": "#000000",
+                "latex": "c_{3}=\\left\\{y_{0}\\ge z_{0}:8,0\\right\\}"
+            },
+            {
+                "type": "expression",
+                "id": "240",
+                "color": "#000000",
+                "latex": "c_{4}=\\left\\{x_{0}\\ge w_{0}:4,0\\right\\}"
+            },
+            {
+                "type": "expression",
+                "id": "241",
+                "color": "#000000",
+                "latex": "c_{5}=\\left\\{y_{0}\\ge w_{0}:2,0\\right\\}"
+            },
+            {
+                "type": "expression",
+                "id": "242",
+                "color": "#000000",
+                "latex": "c_{6}=\\left\\{z_{0}\\ge w_{0}:1,0\\right\\}"
+            },
+            {
+                "type": "text",
+                "id": "497",
+                "text": "we add one since this LUT was designed for 0-indexed arrays (e.g. in Java or C++)"
+            },
+            {
+                "type": "expression",
+                "id": "243",
+                "color": "#c74440",
+                "latex": "c=c_{1}+c_{2}+c_{3}+c_{4}+c_{5}+c_{6}+1"
+            },
+            {
+                "type": "text",
+                "id": "244",
+                "text": "use the LUT to figure out the 2nd smallest simplex vertex (the smallest one is (0,0,0,0) or the origin"
+            },
+            {
+                "type": "expression",
+                "id": "245",
+                "color": "#c74440",
+                "latex": "i_{1}=\\left\\{l_{utX}\\left[c\\right]\\ge3:1,0\\right\\}"
+            },
+            {
+                "type": "expression",
+                "id": "246",
+                "color": "#c74440",
+                "latex": "j_{1}=\\left\\{l_{utY}\\left[c\\right]\\ge3:1,0\\right\\}"
+            },
+            {
+                "type": "expression",
+                "id": "247",
+                "color": "#c74440",
+                "latex": "k_{1}=\\left\\{l_{utZ}\\left[c\\right]\\ge3:1,0\\right\\}"
+            },
+            {
+                "type": "expression",
+                "id": "248",
+                "color": "#c74440",
+                "latex": "l_{1}=\\left\\{l_{utW}\\left[c\\right]\\ge3:1,0\\right\\}"
+            },
+            {
+                "type": "text",
+                "id": "249",
+                "text": "3rd smallest"
+            },
+            {
+                "type": "expression",
+                "id": "250",
+                "color": "#c74440",
+                "latex": "i_{2}=\\left\\{l_{utX}\\left[c\\right]\\ge2:1,0\\right\\}"
+            },
+            {
+                "type": "expression",
+                "id": "251",
+                "color": "#c74440",
+                "latex": "j_{2}=\\left\\{l_{utY}\\left[c\\right]\\ge2:1,0\\right\\}"
+            },
+            {
+                "type": "expression",
+                "id": "252",
+                "color": "#c74440",
+                "latex": "k_{2}=\\left\\{l_{utZ}\\left[c\\right]\\ge2:1,0\\right\\}"
+            },
+            {
+                "type": "expression",
+                "id": "253",
+                "color": "#c74440",
+                "latex": "l_{2}=\\left\\{l_{utW}\\left[c\\right]\\ge2:1,0\\right\\}"
+            },
+            {
+                "type": "text",
+                "id": "254",
+                "text": "4th smallest (the 5th \"smallest\" vertex is always (1,1,1,1) in simplex-local coordinates)"
+            },
+            {
+                "type": "expression",
+                "id": "255",
+                "color": "#c74440",
+                "latex": "i_{3}=\\left\\{l_{utX}\\left[c\\right]\\ge1:1,0\\right\\}"
+            },
+            {
+                "type": "expression",
+                "id": "256",
+                "color": "#c74440",
+                "latex": "j_{3}=\\left\\{l_{utY}\\left[c\\right]\\ge1:1,0\\right\\}"
+            },
+            {
+                "type": "expression",
+                "id": "257",
+                "color": "#c74440",
+                "latex": "k_{3}=\\left\\{l_{utZ}\\left[c\\right]\\ge1:1,0\\right\\}"
+            },
+            {
+                "type": "expression",
+                "id": "258",
+                "color": "#c74440",
+                "latex": "l_{3}=\\left\\{l_{utW}\\left[c\\right]\\ge1:1,0\\right\\}"
+            },
+            {
+                "type": "text",
+                "id": "498",
+                "text": "\"hash\" skewed origin + vertex positions into indices for the gradient lists"
+            },
+            {
+                "type": "expression",
+                "id": "259",
+                "color": "#2d70b3",
+                "latex": "g_{i0}=\\operatorname{mod}\\left(q_{pair}\\left(i,j,k,l\\right),9999\\right)+1"
+            },
+            {
+                "type": "expression",
+                "id": "260",
+                "color": "#2d70b3",
+                "latex": "g_{i1}=\\operatorname{mod}\\left(q_{pair}\\left(i+i_{1},j+j_{1},k+k_{1},l+l_{1}\\right),9999\\right)+1"
+            },
+            {
+                "type": "expression",
+                "id": "261",
+                "color": "#2d70b3",
+                "latex": "g_{i2}=\\operatorname{mod}\\left(q_{pair}\\left(i+i_{2},j+j_{2},k+k_{2},l+l_{2}\\right),9999\\right)+1"
+            },
+            {
+                "type": "expression",
+                "id": "262",
+                "color": "#2d70b3",
+                "latex": "g_{i3}=\\operatorname{mod}\\left(q_{pair}\\left(i+i_{3},j+j_{3},k+k_{3},l+l_{3}\\right),9999\\right)+1"
+            },
+            {
+                "type": "expression",
+                "id": "263",
+                "color": "#2d70b3",
+                "latex": "g_{i4}=\\operatorname{mod}\\left(q_{pair}\\left(i+1,j+1,k+1,l+1\\right),9999\\right)+1"
+            },
+            {
+                "type": "text",
+                "id": "443",
+                "text": "vector from the 2nd smallest vertex to the input point"
+            },
+            {
+                "type": "expression",
+                "id": "422",
+                "color": "#000000",
+                "latex": "x_{1}=x_{0}-i_{1}+G"
+            },
+            {
+                "type": "expression",
+                "id": "425",
+                "color": "#000000",
+                "latex": "y_{1}=y_{0}-j_{1}+G"
+            },
+            {
+                "type": "expression",
+                "id": "424",
+                "color": "#000000",
+                "latex": "z_{1}=z_{0}-k_{1}+G"
+            },
+            {
+                "type": "expression",
+                "id": "423",
+                "color": "#000000",
+                "latex": "w_{1}=w_{0}-l_{1}+G"
+            },
+            {
+                "type": "text",
+                "id": "500",
+                "text": "vector from the 3rd smallest vertex to the input point"
+            },
+            {
+                "type": "expression",
+                "id": "439",
+                "color": "#000000",
+                "latex": "x_{2}=x_{0}-i_{2}+2G"
+            },
+            {
+                "type": "expression",
+                "id": "440",
+                "color": "#000000",
+                "latex": "y_{2}=y_{0}-j_{2}+2G"
+            },
+            {
+                "type": "expression",
+                "id": "441",
+                "color": "#000000",
+                "latex": "z_{2}=z_{0}-k_{2}+2G"
+            },
+            {
+                "type": "expression",
+                "id": "442",
+                "color": "#000000",
+                "latex": "w_{2}=w_{0}-l_{2}+2G"
+            },
+            {
+                "type": "text",
+                "id": "502",
+                "text": "vector from the 4th smallest vertex to the input point"
+            },
+            {
+                "type": "expression",
+                "id": "434",
+                "color": "#000000",
+                "latex": "x_{3}=x_{0}-i_{3}+3G"
+            },
+            {
+                "type": "expression",
+                "id": "435",
+                "color": "#000000",
+                "latex": "y_{3}=y_{0}-j_{3}+3G"
+            },
+            {
+                "type": "expression",
+                "id": "436",
+                "color": "#000000",
+                "latex": "z_{3}=z_{0}-k_{3}+3G"
+            },
+            {
+                "type": "expression",
+                "id": "437",
+                "color": "#000000",
+                "latex": "w_{3}=w_{0}-l_{3}+3G"
+            },
+            {
+                "type": "text",
+                "id": "504",
+                "text": "vector from the largest vertex (which is always (1,1,1,1)) to the input point"
+            },
+            {
+                "type": "expression",
+                "id": "429",
+                "color": "#000000",
+                "latex": "x_{4}=x_{0}-1+4G"
+            },
+            {
+                "type": "expression",
+                "id": "430",
+                "color": "#000000",
+                "latex": "y_{4}=y_{0}-1+4G"
+            },
+            {
+                "type": "expression",
+                "id": "431",
+                "color": "#000000",
+                "latex": "z_{4}=z_{0}-1+4G"
+            },
+            {
+                "type": "expression",
+                "id": "432",
+                "color": "#000000",
+                "latex": "w_{4}=w_{0}-1+4G"
+            },
+            {
+                "type": "text",
+                "id": "506",
+                "text": "compute max(0,0.5-dot(p,p))^4*dot(p,grad)\nwhere p is the unskewed vector from this vertex to the input point and grad is a (pseudo) randomly selected gradient vector from the lists in the \"data\" folder"
+            },
+            {
+                "type": "expression",
+                "id": "452",
+                "color": "#c74440",
+                "latex": "t_{0}=p_{roc}\\left(x_{0},y_{0},z_{0},w_{0},g_{i0}\\right)",
+                "labelSize": "1"
+            },
+            {
+                "type": "expression",
+                "id": "463",
+                "color": "#c74440",
+                "latex": "t_{1}=p_{roc}\\left(x_{1},y_{1},z_{1},w_{1},g_{i1}\\right)",
+                "labelSize": "1"
+            },
+            {
+                "type": "expression",
+                "id": "462",
+                "color": "#c74440",
+                "latex": "t_{2}=p_{roc}\\left(x_{2},y_{2},z_{2},w_{2},g_{i2}\\right)",
+                "labelSize": "1"
+            },
+            {
+                "type": "expression",
+                "id": "461",
+                "color": "#c74440",
+                "latex": "t_{3}=p_{roc}\\left(x_{3},y_{3},z_{3},w_{3},g_{i3}\\right)",
+                "labelSize": "1"
+            },
+            {
+                "type": "expression",
+                "id": "460",
+                "color": "#c74440",
+                "latex": "t_{4}=p_{roc}\\left(x_{4},y_{4},z_{4},w_{4},g_{i4}\\right)",
+                "labelSize": "1"
+            },
+            {
+                "type": "text",
+                "id": "508",
+                "text": "sum the contributions from each kernel and scale to lie between 0 and 1"
+            },
+            {
+                "type": "expression",
+                "id": "453",
+                "color": "#2d70b3",
+                "latex": "s_{implex4D}\\left(x,y,z,w\\right)=\\frac{27}{2}\\left(t_{0}+t_{1}+t_{2}+t_{3}+t_{4}\\right)+\\frac{1}{2}"
+            },
+            {
+                "type": "expression",
+                "id": "509",
+                "color": "#c74440"
+            },
+            {
+                "type": "text",
+                "id": "511",
+                "text": "everything past this is for the visuals"
+            },
+            {
+                "type": "expression",
+                "id": "467",
+                "color": "#2d70b3",
+                "latex": "o_{pacities}=\\left[0.0154384130092,0.0306574358339,0.0604142103936,0.117304240087,0.221196250277,0.394349728052,0.635097400392,0.868953730005\\right]"
+            },
+            {
+                "type": "expression",
+                "id": "470",
+                "color": "#000000",
+                "latex": "l_{ayerStates}\\left(v_{alue}\\right)=\\operatorname{floor}\\left(\\frac{\\operatorname{mod}\\left(255\\left(\\left(\\frac{-\\min\\left(\\max\\left(v_{alue},\\frac{4}{255}\\right),1\\right)-0.01132797019}{-4.5222254367\\cdot10^{12}}\\right)^{-0.0528100288134}-4.65506661293\\right),2^{\\left[1...8\\right]}\\right)}{2^{\\left[0...7\\right]}}\\right)",
+                "hidden": true
+            },
+            {
+                "type": "expression",
+                "id": "471",
+                "color": "#000000",
+                "latex": "l_{ayerStates}\\left(s_{implex4D}\\left(x,y,a,4\\right)\\right)>\\frac{1}{2}",
+                "fillOpacity": "o_{pacities}"
+            },
+            {
+                "type": "expression",
+                "id": "513",
+                "color": "#c74440",
+                "latex": "a=0"
+            },
+            {
+                "type": "expression",
+                "id": "514",
+                "color": "#c74440",
+                "latex": "\\frac{\\sqrt[\\left\\{\\right\\}]{\\left\\{\\right\\}^{\\left\\{\\right\\}}}}{\\left[\\left\\{\\right\\}+\\left\\{\\right\\}\\right]}\\left[\\left\\{\\right\\}=\\left\\{\\right\\}\\right]\\left[\\left\\{\\right\\}\\right]"
+            }
+        ]
     }
 }

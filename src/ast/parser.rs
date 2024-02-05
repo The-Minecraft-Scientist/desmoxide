@@ -23,8 +23,8 @@ pub struct FnId(pub u32, pub IRType);
 pub struct Expressions<'a> {
     pub storage: &'a HashMap<u32, &'a str>,
     pub meta: HashMap<u32, ExpressionMeta<'a>>,
-    ident_lookup: HashMap<&'a str, u32>,
-    fn_lookup: HashMap<&'a str, u32>,
+    pub ident_lookup: HashMap<&'a str, u32>,
+    pub fn_lookup: HashMap<&'a str, u32>,
 }
 impl<'a> Expressions<'a> {
     pub fn new(lines: &'a HashMap<u32, &'a str>) -> Self {

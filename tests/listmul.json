@@ -1,0 +1,28 @@
+{
+    "version": 11,
+    "randomSeed": "9783eb1d224f475930ca7f5b47ca8459",
+    "graph": {
+        "viewport": {
+            "xmin": -10,
+            "ymin": -7.141076769690927,
+            "xmax": 10,
+            "ymax": 7.141076769690927
+        }
+    },
+    "expressions": {
+        "list": [
+            {
+                "type": "expression",
+                "id": "8",
+                "color": "#c74440",
+                "latex": "a=\\left[1,2,3,4\\right]"
+            },
+            {
+                "type": "expression",
+                "id": "9",
+                "color": "#2d70b3",
+                "latex": "g\\left(x,y,z\\right)=\\sin\\left(x\\right)+zya"
+            }
+        ]
+    }
+}

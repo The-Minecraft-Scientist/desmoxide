@@ -3,7 +3,7 @@ use std::{collections::HashMap, time::Instant};
 use crate::{
     ast::parser::Expressions,
     compile::frontend::Frontend,
-    interop::{Expression, Graph},
+    interop::{Expression, Graph, GraphState},
 };
 
 #[test]
@@ -14,16 +14,22 @@ fn test_parse_simplex_4d() {
     parse_graph_exprs(&exprs);
 }
 #[test]
-fn test_compile() {
-    let simplex = include_str!("../tests/simplex.json");
-    let graph = serde_json::de::from_str(include_str!("../tests/simplex.json")).unwrap();
+fn test_compile_simplex() {
+    test_compile_fn("tests/simplex.json", "s_{implex4D}");
+}
+#[test]
+fn test_compile_listmul() {
+    test_compile_fn("tests/listmul.json", "g");
+}
+
+fn test_compile_fn(path: &'static str, func: &'static str) {
+    let graph = serde_json::de::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
     let exprs = get_exprs(&graph);
     let mut p = parse_graph_exprs(&exprs);
     let mut f = Frontend { ctx: &p };
     let t = Instant::now();
-    let val = f.direct_compile_fn("s_{implex4D}").unwrap();
-    //val.instructions.debug_print(val.ret.unwrap()).unwrap();
-    dbg!(val.instructions.len());
+    let val = f.direct_compile_fn(func).unwrap();
+    val.instructions.debug_print(val.ret.unwrap());
     println!(
         "done in {:?} microseconds",
         Instant::now()
@@ -41,9 +47,9 @@ fn parse_graph_exprs<'a>(exprs: &'a HashMap<u32, &'a str>) -> Expressions<'a> {
     }
     p
 }
-fn get_exprs<'a>(body: &'a Graph) -> HashMap<u32, &'a str> {
+fn get_exprs<'a>(body: &'a GraphState) -> HashMap<u32, &'a str> {
     let mut m = HashMap::with_capacity(50);
-    for expr in body.exprs().into_iter().enumerate() {
+    for expr in body.expressions.list.iter().enumerate() {
         if let Expression::Expression {
             id,
             latex: Some(s),
