@@ -1,9 +1,15 @@
 use anyhow::{bail, Context, Result};
+use debug_tree::TreeBuilder;
 use std::{collections::BTreeMap, num::NonZeroU32};
+use strum::{AsRefStr, Display};
 
 use crate::{
-    ast::{parser::FnId, BinaryOp, Comparison, CoordinateAccess, Ident, ListOp, UnaryOp},
+    ast::{
+        parser::FnId, ASTNodeId, BinaryOp, Comparison, CoordinateAccess, Ident, ListOp, UnaryOp,
+        AST,
+    },
     permute,
+    util::Discard,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -88,7 +94,7 @@ pub struct BroadcastArg {
     pub t: IRType,
     pub id: u8,
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, AsRefStr)]
 pub enum UnaryListOp {
     //Ret num
     Min,
@@ -109,7 +115,7 @@ impl UnaryListOp {
         }
     }
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, AsRefStr)]
 pub enum BinaryListOp {
     //Ret list
     Join,
@@ -117,6 +123,20 @@ pub enum BinaryListOp {
     IndexRead,
     IndexWrite,
     Push,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RandomOp {
+    Single,
+    //optional seed
+    Count {
+        count: Id,
+        seed: Option<Id>,
+    },
+    Permute {
+        list: Id,
+        count: Option<Id>,
+        seed: Option<Id>,
+    },
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum EndIndex {
@@ -137,7 +157,7 @@ pub struct ArgId(pub Id);
 ///  * `List`: opaque list identifer
 ///  * `Optional`: Either Some(value) or None. Not a value type, added specifically for internal implementations of various list operations
 /// and special broadcasting instructions are used to iterate over complex types component-wise
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, AsRefStr, Display)]
 pub enum IROp {
     ///No-op, used to generate a valid Never value to point to without actually invoking a control flow instruction
     Nop,
@@ -153,20 +173,24 @@ pub enum IROp {
     LoadArg(ArgId),
     /// list literal. It is valid to refer to a subset of this list by referring to a ListLit that is not the beginning of a. All items in the list must be of the same type
     ListLit(Id),
+    /// Range list generator literal
+    RangeList {
+        begin: Id,
+        stride: Id,
+        end: Id,
+    },
     /// load args\[a]\[i] (if args\[a] is a list of number)
     CoordinateOf(Id, CoordinateAccess),
     /// 2d vector.
     Vec2(Id, Id),
     /// 3d vector.
     Vec3(Id, Id, Id),
-    //TODO: PUT THIS IN ListOp
-    /// length of list at a
-    ListLength(Id),
     /// Begins a broadcast loop that executes its body over indices 0->end_index inclusive, and stores its output in b
     BeginBroadcast {
         inner_type: IRType,
         end_index: EndIndex,
     },
+    Random(RandomOp),
     /// Only allowed directly following SetBroadcast or BeginBroadcast instructions. Sets the broadcast argument slot at b to the item a
     SetBroadcastArg(Id, BroadcastArg),
     LoadBroadcastArg(BroadcastArg),
@@ -209,8 +233,7 @@ impl IROp {
             | IROp::Unary(..)
             | IROp::Const(..)
             | IROp::IConst(..)
-            | IROp::CoordinateOf(..)
-            | IROp::ListLength(..) => IRType::Number,
+            | IROp::CoordinateOf(..) => IRType::Number,
             //Passthrough types
             IROp::LoadArg(ArgId(Id { t, .. }))
             | IROp::LoadBroadcastArg(BroadcastArg { t, .. })
@@ -218,18 +241,16 @@ impl IROp {
             | IROp::BeginPiecewise {
                 res: Id { t, .. }, ..
             }
-            | IROp::BeginBroadcast { inner_type: t, .. }
             | IROp::Ret(Id { t, .. }) => *t,
             //Opaque types
             IROp::Vec2(..) => IRType::Vec2,
             IROp::Vec3(..) => IRType::Vec3,
-            //TODO: see BinarylistOp
-            IROp::ListLit(Id { t, .. }) => t
+            IROp::ListLit(Id { t, .. }) | IROp::BeginBroadcast { inner_type: t, .. } => t
                 .upcast_list()
                 .expect("cannot make a list of non-number/vec types"),
+            IROp::RangeList { .. } => IRType::NumberList,
             //Never types
-            IROp::BeginBroadcast { .. }
-            | IROp::SetBroadcastArg(..)
+            IROp::SetBroadcastArg(..)
             | IROp::EndBroadcast { .. }
             | IROp::FnArg(..)
             | IROp::InnerPiecewise { .. }
@@ -237,11 +258,12 @@ impl IROp {
             | IROp::Nop => IRType::Never,
             //comparison
             IROp::Comparison { .. } => IRType::Bool,
-            IROp::UnaryListOp(l, op) => match op {
-                UnaryListOp::Min | UnaryListOp::Max | UnaryListOp::Total | UnaryListOp::Len => {
-                    IRType::Number
-                }
-                UnaryListOp::Unique | UnaryListOp::Sort | UnaryListOp::Shuffle => l.t,
+            IROp::UnaryListOp(l, op) => op.ty(),
+            //TODO: move these to helper functions on RandomOp
+            IROp::Random(op) => match op {
+                RandomOp::Single => IRType::Number,
+                RandomOp::Count { .. } => IRType::NumberList,
+                RandomOp::Permute { list, .. } => list.t.downcast_list().unwrap(),
             },
             IROp::BinaryListOp(lhs, rhs, op) => {
                 match op {
@@ -258,24 +280,23 @@ impl IROp {
 
 #[derive(Debug, Clone)]
 pub struct IRInstructionSeq {
-    backing: BTreeMap<Id, IROp>,
+    backing: Vec<IROp>,
 }
 impl IRInstructionSeq {
     pub fn new() -> Self {
         Self {
-            backing: BTreeMap::new(),
+            backing: Vec::new(),
         }
+    }
+    pub fn len(&self) -> usize {
+        self.backing.len()
     }
     pub fn push(&mut self, op: IROp) {
         let _ = self.place(op);
     }
     pub fn place(&mut self, op: IROp) -> Id {
-        let mut nid = 0;
-        if let Some(v) = self.backing.last_key_value() {
-            nid = v.0.idx + 1;
-        };
-        let id = Id::new(nid, op.type_of());
-        self.backing.insert(id, op);
+        let id = Id::new(self.backing.len() as u32, op.type_of());
+        self.backing.push(op);
         id
     }
     pub fn coordinates_of2d(&mut self, point: Id) -> (Id, Id) {
@@ -303,12 +324,191 @@ impl IRInstructionSeq {
         }
     }
     pub fn get(&self, id: &Id) -> Result<&IROp> {
-        self.backing.get(id).context("Could not get IR opcode")
+        self.backing
+            .get(id.idx as usize)
+            .context("Could not get IR opcode")
     }
     pub fn latest(&self) -> Result<&IROp> {
         self.backing
-            .last_key_value()
-            .map(|a| a.1)
+            .last()
             .context("called latest on empty InstructionSeq")
+    }
+    pub fn recursive_dbg(&self, builder: &mut TreeBuilder, node: Id) -> Result<()> {
+        macro_rules! named_branch {
+            ($bname:expr, $bctx:expr,$($child:expr),+) => {
+                {let b = builder.add_branch(&format!("{}: {}", $bname, $bctx));
+                $(
+                self.recursive_dbg(builder, *$child)?;
+                )*
+                b}
+            };
+            ($bname:expr, $bctx:expr) => {
+                builder.add_branch(&format!("{}: {}", $bname, $bctx))
+            }
+        }
+        macro_rules! named_branch_list {
+            ($bname:expr, $bctx:expr,$children:expr) => {{
+                let b = builder.add_branch(&format!("{}: {}", $bname, $bctx));
+                for child in $children {
+                    self.recursive_dbg(builder, *child)?;
+                }
+                b
+            }};
+        }
+        let n = self.get(&node)?;
+        let name = n.as_ref();
+        let _branch = match n {
+            IROp::Nop => named_branch!(n, ""),
+            IROp::Binary(lhs, rhs, op) => named_branch!(n, op.as_ref(), lhs, rhs),
+            IROp::Unary(val, op) => named_branch!(n, op.as_ref(), val),
+            IROp::UnaryListOp(l, op) => named_branch!(n, op.as_ref(), l),
+            IROp::BinaryListOp(a, b, op) => named_branch!(n, op.as_ref(), a, b),
+            IROp::Const(val) => {
+                builder.add_leaf(&format!("{:?}", val));
+                return Ok(());
+            }
+            IROp::IConst(val) => {
+                builder.add_leaf(&format!("{:?}", val));
+                return Ok(());
+            }
+            IROp::LoadArg(arg) => {
+                builder.add_leaf(&format!("LoadArg {:?}", arg.0.idx));
+                return Ok(());
+            }
+            IROp::ListLit(val) => {
+                let mut it = self.backing[(node.idx as usize)..].iter();
+                let b = builder.add_branch("List Literal");
+                loop {
+                    if let Some(IROp::ListLit(val)) = it.next() {
+                        self.recursive_dbg(builder, *val)?;
+                    } else {
+                        break;
+                    }
+                }
+                return Ok(());
+            }
+            IROp::RangeList { begin, stride, end } => {
+                let b = builder.add_branch("Range List");
+                let mut b1 = builder.add_branch("from");
+                self.recursive_dbg(builder, *begin);
+                b1.release();
+                let mut b2 = builder.add_branch("to");
+                self.recursive_dbg(builder, *begin);
+                b2.release();
+                let mut b3 = builder.add_branch("with stride");
+                b3.release();
+                b
+            }
+            IROp::CoordinateOf(val, access) => named_branch!(n, access.as_ref(), val),
+            IROp::Vec2(a, b) => named_branch!(n, "", a, b),
+            IROp::Vec3(a, b, c) => named_branch!(n, "", a, b, c),
+            IROp::BeginBroadcast {
+                inner_type,
+                end_index,
+            } => {
+                let outer = builder.add_branch("Broadcast");
+                let mut args = builder.add_branch("with args:");
+                let mut it = self.backing[node.idx as usize..].iter();
+                it.next().discard();
+                loop {
+                    if let Some(IROp::SetBroadcastArg(val, id)) = it.next() {
+                        self.recursive_dbg(builder, *val)?;
+                    } else {
+                        break;
+                    }
+                }
+                args.release();
+                let end = it
+                    .find(|a| matches!(a, IROp::EndBroadcast { begin, .. } if *begin == node))
+                    .unwrap();
+                let IROp::EndBroadcast { begin, ret } = end else {
+                    panic!("unreachable");
+                };
+                self.recursive_dbg(builder, *ret);
+                outer
+            }
+            IROp::Random(r) => match r {
+                RandomOp::Count { count, .. } => {
+                    named_branch!("Random Count", "", count)
+                }
+                RandomOp::Permute { list, count, .. } => {
+                    let b = builder.add_branch("Random Permute");
+                    if let Some(c) = count {
+                        self.recursive_dbg(builder, *c);
+                    } else {
+                        builder.add_branch("single output");
+                    }
+                    self.recursive_dbg(builder, *list);
+                    b
+                }
+                RandomOp::Single => {
+                    builder.add_leaf("Random number");
+                    return Ok(());
+                }
+            },
+            IROp::LoadBroadcastArg(arg) => {
+                builder.add_leaf(&format!("{:?}", arg));
+                return Ok(());
+            }
+            IROp::Comparison { lhs, comp, rhs } => named_branch!(n, comp.as_ref(), lhs, rhs),
+            //This must address Inner/End Piecewises as well
+            IROp::BeginPiecewise { comp, res } => {
+                let mut it = self.backing[node.idx as usize..].iter();
+                it.next().discard();
+                let b = builder.add_branch("Piecewise");
+                let mut b0 = builder.add_branch("");
+                let mut b1 = builder.add_branch("if");
+                self.recursive_dbg(builder, *comp)?;
+                b1.release();
+                let mut b2 = builder.add_branch("then");
+                self.recursive_dbg(builder, *res)?;
+                b2.release();
+                b0.release();
+                let last = loop {
+                    let next = it.next();
+                    let Some(IROp::InnerPiecewise { comp, res }) = next else {
+                        break next;
+                    };
+                    let mut b0 = builder.add_branch("");
+                    let mut b1 = builder.add_branch("if");
+                    self.recursive_dbg(builder, *comp)?;
+                    b1.release();
+                    let mut b2 = builder.add_branch("then");
+                    self.recursive_dbg(builder, *res)?;
+                    b2.release();
+                    b0.release();
+                };
+                //TODO: EndPiecewise needs to track corresponding BeginPiecewise
+                let Some(IROp::EndPiecewise { default }) = last else {
+                    bail!("Piecewise without an EndPiecewise!!");
+                };
+                let mut b5 = builder.add_branch("else");
+                self.recursive_dbg(builder, *default);
+                b5.release();
+                b
+            }
+            IROp::FnCall(f) => {
+                let b = builder.add_branch(&format!("Function call (id {})", f.0));
+                let mut it = self.backing[node.idx as usize..].iter();
+                it.next().discard();
+                loop {
+                    if let Some(IROp::FnArg(val)) = it.next() {
+                        self.recursive_dbg(builder, *val)?;
+                    } else {
+                        break;
+                    }
+                }
+                b
+            }
+            IROp::Ret(id) => named_branch!(n, "", id),
+            _ => unreachable!(),
+        };
+        Ok(())
+    }
+    pub fn debug_print(&self, id: Id) -> Result<()> {
+        let mut builder = TreeBuilder::new();
+        self.recursive_dbg(&mut builder, id)?;
+        builder.print();
+        Ok(())
     }
 }

@@ -23,7 +23,7 @@ use thin_vec::ThinVec;
 pub struct ASTNodeId(NonZeroUsize);
 
 #[derive(Clone, Debug, strum::AsRefStr)]
-//TODO: this is 32 bytes for some reason. It should be 24
+//TODO: See about shrinking this
 pub enum ASTNode<'a> {
     Val(Value<'a>),
     Binary(ASTNodeId, ASTNodeId, BinaryOp),
@@ -353,6 +353,7 @@ impl<'source> Index<ASTNodeId> for AST<'source> {
 }
 impl<'source> Debug for AST<'source> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("\n");
         let mut builder = TreeBuilder::new();
         builder.set_config_override(TreeConfig::new().symbols(TreeSymbols::with_rounded()));
         self.recursive_dbg(&mut builder, self.root.unwrap())

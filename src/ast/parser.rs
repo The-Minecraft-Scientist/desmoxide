@@ -23,8 +23,8 @@ pub struct FnId(pub u32, pub IRType);
 pub struct Expressions<'a> {
     pub storage: &'a HashMap<u32, &'a str>,
     pub meta: HashMap<u32, ExpressionMeta<'a>>,
-    ident_lookup: HashMap<&'a str, u32>,
-    fn_lookup: HashMap<&'a str, u32>,
+    pub ident_lookup: HashMap<&'a str, u32>,
+    pub fn_lookup: HashMap<&'a str, u32>,
 }
 impl<'a> Expressions<'a> {
     pub fn new(lines: &'a HashMap<u32, &'a str>) -> Self {
@@ -44,8 +44,7 @@ impl<'a> Expressions<'a> {
         ))))
     }
     pub fn ident_ast(&self, i: &str) -> Result<&AST<'a>> {
-        dbg!(&self.meta);
-        let idx = self.fn_ident_id(i)?;
+        let idx = self.ident_id(i)?;
         Ok(self
             .meta
             .get(&idx)
@@ -73,6 +72,12 @@ impl<'a> Expressions<'a> {
     pub fn fn_ident_id(&self, i: &str) -> Result<u32> {
         Ok(*self
             .fn_lookup
+            .get(i)
+            .context(format!("could not find Function {}", i))?)
+    }
+    pub fn ident_id(&self, i: &str) -> Result<u32> {
+        Ok(*self
+            .ident_lookup
             .get(i)
             .context(format!("could not find Ident {}", i))?)
     }
@@ -103,6 +108,7 @@ impl<'a> Expressions<'a> {
                                     break None;
                                 }
                                 lexer.catch_up();
+                                self.fn_lookup.insert(first.0, idx);
                                 break Some(ExpressionType::Fn {
                                     name: first.0.into(),
                                     params: argv,

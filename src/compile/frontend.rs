@@ -4,12 +4,14 @@ use super::ir::{ArgId, BroadcastArg, EndIndex, IRInstructionSeq, IROp, IRType, I
 use crate::{
     ast::{
         parser::{Expressions, FnId},
-        ASTNode, ASTNodeId, BinaryOp, CoordinateAccess, Ident, List, Opcode, UnaryOp, Value, AST,
+        ASTNode, ASTNodeId, BinaryOp, CoordinateAccess, Ident, List, ListOp, Opcode, UnaryOp,
+        Value, AST,
     },
     compile::ir::BinaryListOp,
     compiler_error, permute,
 };
 use anyhow::{bail, Context, Result};
+use debug_tree::TreeBuilder;
 use thin_vec::ThinVec;
 
 #[derive(Debug)]
@@ -19,9 +21,9 @@ pub struct Frontend<'borrow, 'source> {
 /// Contains a standalone executable IR sequence along with metadata about its arguments and their types
 #[derive(Debug, Clone)]
 pub struct IRSegment {
-    args: Vec<IRType>,
-    instructions: IRInstructionSeq,
-    ret: Option<Id>,
+    pub args: Vec<IRType>,
+    pub instructions: IRInstructionSeq,
+    pub ret: Option<Id>,
 }
 impl IRSegment {
     pub fn new(args: Vec<IRType>) -> Self {
@@ -92,6 +94,12 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
         self.ctx.cache_compiled_fn(idx, t, segment)?;
         Ok(FnId(idx, t))
     }
+    pub fn direct_compile_fn(&mut self, i: &str) -> Result<IRSegment> {
+        let id = self.ctx.fn_ident_id(i)?;
+        let (args, ast) = self.ctx.fn_ident_ast(id)?;
+        let mut v = vec![IRType::Number; args.len()];
+        self.compile_fn(&v, args, ast)
+    }
     fn rec_build_ir(
         &mut self,
         segment: &mut IRSegment,
@@ -104,7 +112,6 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
                 Value::ConstantI64(v) => segment.instructions.place(IROp::IConst(*v)),
                 Value::ConstantF64(v) => segment.instructions.place(IROp::Const(*v)),
                 Value::Ident(s) => {
-                    //TODO: handle x and y as special cases here
                     if let Some(t) = frame.map_ident(s.as_str()) {
                         t
                     } else {
@@ -132,8 +139,12 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
                         }
                         let t = t0;
                         //Generate broadcast header
-                        let len0 = segment.instructions.place(IROp::ListLength(arg0));
-                        let len1 = segment.instructions.place(IROp::ListLength(arg1));
+                        let len0 = segment
+                            .instructions
+                            .place(IROp::UnaryListOp(arg0, super::ir::UnaryListOp::Len));
+                        let len1 = segment
+                            .instructions
+                            .place(IROp::UnaryListOp(arg1, super::ir::UnaryListOp::Len));
                         let len =
                             segment
                                 .instructions
@@ -165,13 +176,11 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
                 }
             }
             ASTNode::Unary(v, op) => {
-                //TODO: come up with a cleaner way to deal with broadcast codegen
                 let inner = self.rec_build_ir(segment, *v, expr, frame)?;
                 if let Some(lt) = inner.t.downcast_list() {
-                    let len = segment.instructions.place(IROp::ListLength(inner));
                     let begin = segment.instructions.place(IROp::BeginBroadcast {
                         inner_type: lt,
-                        end_index: EndIndex::Val(len),
+                        end_index: EndIndex::Full,
                     });
                     let arg = BroadcastArg { t: lt, id: 0 };
                     segment.instructions.push(IROp::SetBroadcastArg(inner, arg));
@@ -179,7 +188,8 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
                     let v = self.build_simple_unary_fn(segment, node, vali, *op)?;
                     segment
                         .instructions
-                        .place(IROp::EndBroadcast { begin, ret: v })
+                        .push(IROp::EndBroadcast { begin, ret: v });
+                    begin
                 } else {
                     self.build_simple_unary_fn(segment, node, inner, *op)?
                 }
@@ -231,16 +241,16 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
             }
             ASTNode::Index(list, index) => {
                 let l = self.rec_build_ir(segment, *list, expr, frame)?;
+                let inner_type =
+                    l.t.downcast_list()
+                        .context("expected a list, got a value")?;
                 match expr.get_node(*index)? {
                     //List filter
                     ASTNode::Comparison(rhs, comp, lhs) => {
                         //TODO: assertions for all of this
 
                         let begin = segment.instructions.place(IROp::BeginBroadcast {
-                            inner_type: l
-                                .t
-                                .downcast_list()
-                                .context("expected a list, got a value")?,
+                            inner_type,
                             end_index: EndIndex::Full,
                         });
                         let arg = BroadcastArg { t: l.t, id: 0 };
@@ -265,47 +275,148 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
                     }
                     //normal indexing
                     a => {
+                        //TODO: type assertions
                         let idx_val = self.rec_build_ir(segment, *index, expr, frame)?;
-                        segment.instructions.place(IROp::BinaryListOp(
-                            l,
-                            idx_val,
-                            BinaryListOp::IndexRead,
-                        ))
-                    }
-                }
-            }
-            ASTNode::List(l) => {
-                //TODO: deal with list instantiation in a non-jank way in IR
-                match l {
-                    List::ListComp(expr, vals) => todo!(),
-                    List::Range(begin, end) => todo!(),
-                    List::List(exprs) => {
-                        let mut it = exprs.iter();
-                        let Some(head) = it.next() else {
-                            compiler_error!(
-                                node,
-                                "desmoxide does not yet support empty list literals"
-                            );
-                        };
-                        let head = self.rec_build_ir(segment, *head, expr, frame)?;
-                        let i = it
-                            .map(|id| self.rec_build_ir(segment, *id, expr, frame))
-                            .collect::<Vec<_>>()
-                            .into_iter();
-                        let head = segment.instructions.place(IROp::ListLit(head));
-                        for val in i {
-                            segment.instructions.push(IROp::ListLit(val?));
+                        //Need to broadcast this index op
+                        if idx_val.t == IRType::NumberList {
+                            let header = segment.instructions.place(IROp::BeginBroadcast {
+                                inner_type,
+                                end_index: EndIndex::Full,
+                            });
+                            let arg = BroadcastArg {
+                                t: inner_type,
+                                id: 0,
+                            };
+                            segment
+                                .instructions
+                                .push(IROp::SetBroadcastArg(idx_val, arg));
+                            let idx = segment.instructions.place(IROp::LoadBroadcastArg(arg));
+                            let indexed = segment.instructions.place(IROp::BinaryListOp(
+                                l,
+                                idx,
+                                BinaryListOp::IndexRead,
+                            ));
+                            segment.instructions.push(IROp::EndBroadcast {
+                                begin: header,
+                                ret: indexed,
+                            });
+                            header
+                        } else {
+                            segment.instructions.place(IROp::BinaryListOp(
+                                l,
+                                idx_val,
+                                BinaryListOp::IndexRead,
+                            ))
                         }
-                        head
                     }
                 }
             }
+            ASTNode::List(l) => match l {
+                List::ListComp(expr, vals) => todo!(),
+                List::Range(begin, end) => todo!(),
+                List::List(exprs) => {
+                    let mut it = exprs.iter();
+                    let Some(head) = it.next() else {
+                        compiler_error!(node, "desmoxide does not yet support empty list literals");
+                    };
+                    let head = self.rec_build_ir(segment, *head, expr, frame)?;
+                    let i = it
+                        .map(|id| self.rec_build_ir(segment, *id, expr, frame))
+                        .collect::<Vec<_>>()
+                        .into_iter();
+                    let head = segment.instructions.place(IROp::ListLit(head));
+                    for val in i {
+                        segment.instructions.push(IROp::ListLit(val?));
+                    }
+                    head
+                }
+            },
             ASTNode::Point(x, y) => {
                 let x = self.rec_build_ir(segment, *x, expr, frame)?;
                 let y = self.rec_build_ir(segment, *y, expr, frame)?;
                 segment.instructions.place(IROp::Vec2(x, y))
             }
-            ASTNode::ListOp(_, _) => todo!(),
+            ASTNode::ListOp(v, op) => match op {
+                ListOp::Min => {
+                    let list = self.join_list_args(segment, node, v, expr, frame)?;
+                    segment
+                        .instructions
+                        .place(IROp::UnaryListOp(list, super::ir::UnaryListOp::Min))
+                }
+                ListOp::Max => {
+                    let list = self.join_list_args(segment, node, v, expr, frame)?;
+                    segment
+                        .instructions
+                        .place(IROp::UnaryListOp(list, super::ir::UnaryListOp::Max))
+                }
+                ListOp::Count => todo!(),
+                ListOp::Total => todo!(),
+                ListOp::Join => todo!(),
+                ListOp::Length => todo!(),
+                ListOp::Unique => todo!(),
+                ListOp::Sort => todo!(),
+                ListOp::Shuffle => todo!(),
+                //Welcome to hell
+                ListOp::Random => {
+                    let mut it = v.iter();
+                    if let Some(first) = it.next() {
+                        let first = self.rec_build_ir(segment, *first, expr, frame)?;
+                        if let Some(_) = first.t.downcast_list() {
+                            if let Some(second) = it.next() {
+                                let second = self.rec_build_ir(segment, *second, expr, frame)?;
+                                let seed;
+                                if let Some(s) = it.next() {
+                                    seed = Some(self.rec_build_ir(segment, *s, expr, frame)?);
+                                } else {
+                                    seed = None;
+                                }
+                                segment.instructions.place(IROp::Random(
+                                    super::ir::RandomOp::Permute {
+                                        list: first,
+                                        count: Some(second),
+                                        seed,
+                                    },
+                                ))
+                            } else {
+                                segment.instructions.place(IROp::Random(
+                                    super::ir::RandomOp::Permute {
+                                        list: first,
+                                        count: None,
+                                        seed: None,
+                                    },
+                                ))
+                            }
+                        } else {
+                            if let Some(second) = it.next() {
+                                let second = self.rec_build_ir(segment, *second, expr, frame)?;
+                                let seed;
+                                if let Some(sid) = it.next() {
+                                    seed = Some(self.rec_build_ir(segment, *sid, expr, frame)?);
+                                } else {
+                                    seed = None;
+                                }
+                                segment.instructions.place(IROp::Random(
+                                    super::ir::RandomOp::Count {
+                                        count: second,
+                                        seed,
+                                    },
+                                ))
+                            } else {
+                                segment.instructions.place(IROp::Random(
+                                    super::ir::RandomOp::Count {
+                                        count: first,
+                                        seed: None,
+                                    },
+                                ))
+                            }
+                        }
+                    } else {
+                        segment
+                            .instructions
+                            .place(IROp::Random(super::ir::RandomOp::Single))
+                    }
+                }
+            },
             ASTNode::CoordinateAccess(p, access) => {
                 let p = self.rec_build_ir(segment, *p, expr, frame)?;
                 segment.instructions.place(IROp::CoordinateOf(p, *access))
@@ -348,6 +459,27 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
             }
         };
         Ok(res)
+    }
+    fn join_list_args(
+        &mut self,
+        segment: &mut IRSegment,
+        node: ASTNodeId,
+        args: &ThinVec<ASTNodeId>,
+        expr: &'borrow AST<'source>,
+        frame: &Frame,
+    ) -> Result<Id> {
+        let mut iter = args.iter();
+        let Some(initial) = iter.next() else {
+            bail!("tried to join arguments for list function, got a zero-length list");
+        };
+        let mut prev = self.rec_build_ir(segment, *initial, expr, frame)?;
+        for i in iter {
+            let val = self.rec_build_ir(segment, *i, expr, frame)?;
+            prev = segment
+                .instructions
+                .place(IROp::BinaryListOp(prev, val, BinaryListOp::Join));
+        }
+        Ok(prev)
     }
     fn build_simple_binary_fn(
         &mut self,
