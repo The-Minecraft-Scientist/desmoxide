@@ -3,12 +3,12 @@ use std::{collections::HashMap, time::Instant};
 use crate::{
     ast::expression_manager::Expressions,
     compile::frontend::Frontend,
-    interop::{Expression, Graph, GraphState},
+    interop::{Expression, GraphState},
 };
 
 #[test]
 fn test_parse_simplex_4d() {
-    let simplex = include_str!("../tests/simplex.json");
+    let _simplex = include_str!("../tests/simplex.json");
     let graph = serde_json::de::from_str(include_str!("../tests/simplex.json")).unwrap();
     let exprs = get_exprs(&graph);
     parse_graph_exprs(&exprs);
@@ -25,7 +25,7 @@ fn test_compile_listmul() {
 fn test_compile_fn(path: &'static str, func: &'static str) {
     let graph = serde_json::de::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
     let exprs = get_exprs(&graph);
-    let mut p = parse_graph_exprs(&exprs);
+    let p = parse_graph_exprs(&exprs);
     let mut f = Frontend { ctx: &p };
     let t = Instant::now();
     let val = f.direct_compile_fn(func).unwrap();

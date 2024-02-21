@@ -1,8 +1,7 @@
 use std::{
-    cell::{Cell, RefCell},
+    cell::{RefCell},
     collections::HashMap,
     fmt::Debug,
-    hash::Hash,
 };
 use thin_vec::ThinVec;
 

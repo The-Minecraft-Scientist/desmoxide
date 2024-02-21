@@ -1,14 +1,13 @@
 use anyhow::{bail, Context, Result};
 use debug_tree::TreeBuilder;
-use std::{collections::BTreeMap, num::NonZeroU32};
+
 use strum::{AsRefStr, Display};
 
 use crate::{
     ast::{
-        expression_manager::FnId, ASTNodeId, BinaryOp, Comparison, CoordinateAccess, Ident, ListOp,
-        UnaryOp, AST,
+        expression_manager::FnId, BinaryOp, Comparison, CoordinateAccess,
+        UnaryOp,
     },
-    permute,
     util::Discard,
 };
 
@@ -278,10 +277,10 @@ impl IROp {
             | IROp::Nop => IRType::Never,
             //comparison
             IROp::Comparison { .. } => IRType::Bool,
-            IROp::UnaryListOp(l, op) => op.ty(),
+            IROp::UnaryListOp(_l, op) => op.ty(),
             //TODO: move these to helper functions on RandomOp
             IROp::Random(op) => op.output_type(),
-            IROp::BinaryListOp(lhs, rhs, op) => {
+            IROp::BinaryListOp(lhs, _rhs, op) => {
                 match op {
                     BinaryListOp::Join => lhs.t(),
                     //TODO: deal with this. This invariant always needs to hold, need to implement IR verifier/specify all possible invariants required to have valid IR
@@ -372,7 +371,7 @@ impl IRInstructionSeq {
             }};
         }
         let n = self.get(&node)?;
-        let name = n.as_ref();
+        let _name = n.as_ref();
         let _branch = match n {
             IROp::Nop => named_branch!(n, ""),
             IROp::Binary(lhs, rhs, op) => named_branch!(n, op.as_ref(), lhs, rhs),
@@ -391,9 +390,9 @@ impl IRInstructionSeq {
                 builder.add_leaf(&format!("LoadArg {:?}", arg.idx));
                 return Ok(());
             }
-            IROp::ListLit(val) => {
+            IROp::ListLit(_val) => {
                 let mut it = self.backing[(node.idx() as usize)..].iter();
-                let b = builder.add_branch("List Literal");
+                let _b = builder.add_branch("List Literal");
                 loop {
                     if let Some(IROp::ListLit(val)) = it.next() {
                         self.recursive_dbg(builder, *val)?;
@@ -403,7 +402,7 @@ impl IRInstructionSeq {
                 }
                 return Ok(());
             }
-            IROp::RangeList { begin, stride, end } => {
+            IROp::RangeList { begin, stride: _, end: _ } => {
                 let b = builder.add_branch("Range List");
                 let mut b1 = builder.add_branch("from");
                 self.recursive_dbg(builder, *begin);
@@ -419,15 +418,15 @@ impl IRInstructionSeq {
             IROp::Vec2(a, b) => named_branch!(n, "", a, b),
             IROp::Vec3(a, b, c) => named_branch!(n, "", a, b, c),
             IROp::BeginBroadcast {
-                inner_type,
-                end_index,
+                inner_type: _,
+                end_index: _,
             } => {
                 let outer = builder.add_branch("Broadcast");
                 let mut args = builder.add_branch("with args:");
                 let mut it = self.backing[node.idx() as usize..].iter();
                 it.next().discard();
                 loop {
-                    if let Some(IROp::SetBroadcastArg(val, id)) = it.next() {
+                    if let Some(IROp::SetBroadcastArg(val, _id)) = it.next() {
                         self.recursive_dbg(builder, *val)?;
                     } else {
                         break;
@@ -437,7 +436,7 @@ impl IRInstructionSeq {
                 let end = it
                     .find(|a| matches!(a, IROp::EndBroadcast { begin, .. } if *begin == node))
                     .unwrap();
-                let IROp::EndBroadcast { begin, ret } = end else {
+                let IROp::EndBroadcast { begin: _, ret } = end else {
                     panic!("unreachable");
                 };
                 self.recursive_dbg(builder, *ret);

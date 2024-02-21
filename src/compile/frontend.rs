@@ -1,17 +1,17 @@
-use std::{collections::HashMap, fmt::Debug, hash::Hash};
+use std::{collections::HashMap, fmt::Debug};
 
 use super::ir::{ArgId, BroadcastArg, EndIndex, IRInstructionSeq, IROp, IRType, Id};
 use crate::{
     ast::{
         expression_manager::{Expressions, FnId},
-        ASTNode, ASTNodeId, BinaryOp, CoordinateAccess, Ident, List, ListOp, Opcode, UnaryOp,
+        ASTNode, ASTNodeId, BinaryOp, CoordinateAccess, Ident, List, ListOp, UnaryOp,
         Value, AST,
     },
     compile::ir::BinaryListOp,
     compiler_error, permute,
 };
 use anyhow::{bail, Context, Result};
-use debug_tree::TreeBuilder;
+
 use thin_vec::ThinVec;
 
 #[derive(Debug)]
@@ -98,7 +98,7 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
     pub fn direct_compile_fn(&mut self, i: &str) -> Result<IRSegment> {
         let id = self.ctx.fn_ident_id(i)?;
         let (args, ast) = self.ctx.fn_ident_ast(id)?;
-        let mut v = vec![IRType::Number; args.len()];
+        let v = vec![IRType::Number; args.len()];
         self.compile_fn(&v, args, ast)
     }
     fn rec_build_ir(
@@ -278,7 +278,7 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
                         begin
                     }
                     //normal indexing
-                    a => {
+                    _a => {
                         //TODO: type assertions
                         let idx_val = self.rec_build_ir(segment, *index, expr, frame)?;
                         //Need to broadcast this index op
@@ -316,8 +316,8 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
                 }
             }
             ASTNode::List(l) => match l {
-                List::ListComp(expr, vals) => todo!(),
-                List::Range(begin, end) => todo!(),
+                List::ListComp(_expr, _vals) => todo!(),
+                List::Range(_begin, _end) => todo!(),
                 List::List(exprs) => {
                     let mut it = exprs.iter();
                     let Some(head) = it.next() else {
@@ -467,7 +467,7 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
     fn join_list_args(
         &mut self,
         segment: &mut IRSegment,
-        node: ASTNodeId,
+        _node: ASTNodeId,
         args: &ThinVec<ASTNodeId>,
         expr: &'borrow AST<'source>,
         frame: &mut Frame<'source>,
@@ -522,7 +522,7 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
                 }
                 let xn = segment.instructions.place(IROp::Binary(x, number, op));
                 let yn = segment.instructions.place(IROp::Binary(y, number, op));
-                let zn = segment.instructions.place(IROp::Binary(z, number, op));
+                let _zn = segment.instructions.place(IROp::Binary(z, number, op));
                 segment.instructions.place(IROp::Vec2(xn, yn))
             }
             //TODO: better compiler errors here
