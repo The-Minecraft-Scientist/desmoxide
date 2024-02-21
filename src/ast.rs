@@ -6,7 +6,6 @@ use crate::util::thin_str::ThinStr;
 use anyhow::{bail, Context, Result};
 //Re-export stuff from private scopes (used to keep enum name collisions down)
 
-
 use debug_tree::{AsTree, TreeBuilder, TreeConfig, TreeSymbols};
 use strum::AsRefStr;
 
@@ -23,7 +22,6 @@ use thin_vec::ThinVec;
 pub struct ASTNodeId(NonZeroU32);
 
 #[derive(Clone, Debug, strum::AsRefStr)]
-//TODO: See about shrinking this
 pub enum ASTNode<'a> {
     Val(Value<'a>),
     Binary(ASTNodeId, ASTNodeId, BinaryOp),

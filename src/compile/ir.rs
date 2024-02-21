@@ -275,7 +275,6 @@ impl IROp {
             //comparison
             IROp::Comparison { .. } => IRType::Bool,
             IROp::UnaryListOp(_l, op) => op.ty(),
-            //TODO: move these to helper functions on RandomOp
             IROp::Random(op) => op.output_type(),
             IROp::BinaryListOp(lhs, _rhs, op) => {
                 match op {
