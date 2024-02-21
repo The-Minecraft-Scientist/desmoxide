@@ -29,13 +29,11 @@ fn test_compile_fn(path: &'static str, func: &'static str) {
     let mut f = Frontend { ctx: &p };
     let t = Instant::now();
     let val = f.direct_compile_fn(func).unwrap();
-    val.instructions.debug_print(val.ret.unwrap());
+    let after = Instant::now();
+    //val.instructions.debug_print(val.ret.unwrap());
     println!(
         "done in {:?} microseconds",
-        Instant::now()
-            .checked_duration_since(t)
-            .unwrap()
-            .as_micros()
+        after.checked_duration_since(t).unwrap().as_micros()
     );
 }
 fn parse_graph_exprs<'a>(exprs: &'a HashMap<u32, &'a str>) -> Expressions<'a> {

@@ -13,6 +13,7 @@ use crate::{
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[repr(u8)]
 pub enum IRType {
     Number,
     Vec2,
@@ -58,35 +59,40 @@ impl IRType {
 /// Identifies a numeric argument to the relevant IRChunk by index in the argument list
 #[derive(Debug, Clone, Copy)]
 pub struct Id {
-    pub idx: u32,
-    pub t: IRType,
+    inner: u32,
 }
 
 impl Id {
+    pub const INDEX_MASK: u32 = 0xFFFFFF;
     pub fn new(idx: u32, t: IRType) -> Self {
-        Self { idx, t }
+        assert!(idx <= Self::INDEX_MASK);
+
+        Self {
+            inner: idx | ((t as u8 as u32) << 24),
+        }
+    }
+    #[inline(always)]
+    pub fn idx(&self) -> u32 {
+        self.inner & Self::INDEX_MASK
+    }
+    #[inline(always)]
+    pub fn t(&self) -> IRType {
+        //SAFETY: inner is private, and it's highest byte always contains a valid value of IRType
+        unsafe { std::mem::transmute(self.inner.to_le_bytes()[3]) }
     }
     pub fn with_idx(&self, idx: u32) -> Self {
-        Self { t: self.t, idx }
+        assert!(idx <= Self::INDEX_MASK);
+        Self {
+            inner: (self.inner & !Self::INDEX_MASK) | idx,
+        }
     }
 }
 impl PartialEq for Id {
     fn eq(&self, other: &Self) -> bool {
-        self.idx == other.idx
+        self.inner == other.inner
     }
 }
 impl Eq for Id {}
-impl PartialOrd for Id {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.idx.cmp(&other.idx))
-    }
-}
-impl Ord for Id {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        //Always Some
-        self.idx.cmp(&other.idx)
-    }
-}
 
 /// Identifies an argument to the current broadcast scope
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -138,14 +144,17 @@ pub enum RandomOp {
         seed: Option<Id>,
     },
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EndIndex {
     Val(Id),
     Full,
 }
 // typed indentifier that identifies an item of type and index in args
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct ArgId(pub Id);
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ArgId {
+    pub idx: u8,
+    pub t: IRType,
+}
 //TODO: investigate using this representation in egg/egglog
 /// ### Desmoxide IR format
 /// This is mostly equivalent to the TAC-based IR format used by desmos (see https://github.com/DesModder/DesModder/blob/main/parsing/IR.ts).
@@ -235,17 +244,19 @@ impl IROp {
             | IROp::IConst(..)
             | IROp::CoordinateOf(..) => IRType::Number,
             //Passthrough types
-            IROp::LoadArg(ArgId(Id { t, .. }))
-            | IROp::LoadBroadcastArg(BroadcastArg { t, .. })
+            IROp::LoadBroadcastArg(BroadcastArg { t, .. })
             | IROp::FnCall(FnId(_, t))
-            | IROp::BeginPiecewise {
-                res: Id { t, .. }, ..
-            }
-            | IROp::Ret(Id { t, .. }) => *t,
+            | IROp::LoadArg(ArgId { t, .. }) => *t,
+
+            IROp::BeginPiecewise { res: id, .. } | IROp::Ret(id) => id.t(),
             //Opaque types
             IROp::Vec2(..) => IRType::Vec2,
             IROp::Vec3(..) => IRType::Vec3,
-            IROp::ListLit(Id { t, .. }) | IROp::BeginBroadcast { inner_type: t, .. } => t
+            IROp::ListLit(id) => id
+                .t()
+                .upcast_list()
+                .expect("cannot make a list of non-number/vec types"),
+            IROp::BeginBroadcast { inner_type: t, .. } => t
                 .upcast_list()
                 .expect("cannot make a list of non-number/vec types"),
             IROp::RangeList { .. } => IRType::NumberList,
@@ -263,13 +274,13 @@ impl IROp {
             IROp::Random(op) => match op {
                 RandomOp::Single => IRType::Number,
                 RandomOp::Count { .. } => IRType::NumberList,
-                RandomOp::Permute { list, .. } => list.t.downcast_list().unwrap(),
+                RandomOp::Permute { list, .. } => list.t().downcast_list().unwrap(),
             },
             IROp::BinaryListOp(lhs, rhs, op) => {
                 match op {
-                    BinaryListOp::Join => lhs.t,
+                    BinaryListOp::Join => lhs.t(),
                     //TODO: deal with this. This invariant always needs to hold, need to implement IR verifier/specify all possible invariants required to have valid IR
-                    BinaryListOp::IndexRead => lhs.t.downcast_list().unwrap(),
+                    BinaryListOp::IndexRead => lhs.t().downcast_list().unwrap(),
                     BinaryListOp::IndexWrite => IRType::Never,
                     BinaryListOp::Push => IRType::Never,
                 }
@@ -325,7 +336,7 @@ impl IRInstructionSeq {
     }
     pub fn get(&self, id: &Id) -> Result<&IROp> {
         self.backing
-            .get(id.idx as usize)
+            .get(id.idx() as usize)
             .context("Could not get IR opcode")
     }
     pub fn latest(&self) -> Result<&IROp> {
@@ -372,11 +383,11 @@ impl IRInstructionSeq {
                 return Ok(());
             }
             IROp::LoadArg(arg) => {
-                builder.add_leaf(&format!("LoadArg {:?}", arg.0.idx));
+                builder.add_leaf(&format!("LoadArg {:?}", arg.idx));
                 return Ok(());
             }
             IROp::ListLit(val) => {
-                let mut it = self.backing[(node.idx as usize)..].iter();
+                let mut it = self.backing[(node.idx() as usize)..].iter();
                 let b = builder.add_branch("List Literal");
                 loop {
                     if let Some(IROp::ListLit(val)) = it.next() {
@@ -408,7 +419,7 @@ impl IRInstructionSeq {
             } => {
                 let outer = builder.add_branch("Broadcast");
                 let mut args = builder.add_branch("with args:");
-                let mut it = self.backing[node.idx as usize..].iter();
+                let mut it = self.backing[node.idx() as usize..].iter();
                 it.next().discard();
                 loop {
                     if let Some(IROp::SetBroadcastArg(val, id)) = it.next() {
@@ -453,7 +464,7 @@ impl IRInstructionSeq {
             IROp::Comparison { lhs, comp, rhs } => named_branch!(n, comp.as_ref(), lhs, rhs),
             //This must address Inner/End Piecewises as well
             IROp::BeginPiecewise { comp, res } => {
-                let mut it = self.backing[node.idx as usize..].iter();
+                let mut it = self.backing[node.idx() as usize..].iter();
                 it.next().discard();
                 let b = builder.add_branch("Piecewise");
                 let mut b0 = builder.add_branch("");
@@ -489,7 +500,7 @@ impl IRInstructionSeq {
             }
             IROp::FnCall(f) => {
                 let b = builder.add_branch(&format!("Function call (id {})", f.0));
-                let mut it = self.backing[node.idx as usize..].iter();
+                let mut it = self.backing[node.idx() as usize..].iter();
                 it.next().discard();
                 loop {
                     if let Some(IROp::FnArg(val)) = it.next() {

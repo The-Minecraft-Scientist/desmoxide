@@ -4,9 +4,7 @@ pub struct EGraph<Term> {
     //Union-find datastructure. Maps E-node (operation) Ids to the "canonical" (representative) Id
     classes: UsizeDisjointSet<Term>,
 }
-pub trait TermIntern<Term> {
-    fn map(t: Term) -> usize
-}
+pub trait TermIntern<Term> {}
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Id(usize);
 impl From<usize> for Id {
