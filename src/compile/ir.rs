@@ -4,10 +4,7 @@ use debug_tree::TreeBuilder;
 use strum::{AsRefStr, Display};
 
 use crate::{
-    ast::{
-        expression_manager::FnId, BinaryOp, Comparison, CoordinateAccess,
-        UnaryOp,
-    },
+    ast::{expression_manager::FnId, BinaryOp, Comparison, CoordinateAccess, UnaryOp},
     util::Discard,
 };
 
@@ -402,13 +399,17 @@ impl IRInstructionSeq {
                 }
                 return Ok(());
             }
-            IROp::RangeList { begin, stride: _, end: _ } => {
+            IROp::RangeList {
+                begin,
+                stride: _,
+                end: _,
+            } => {
                 let b = builder.add_branch("Range List");
                 let mut b1 = builder.add_branch("from");
-                self.recursive_dbg(builder, *begin);
+                self.recursive_dbg(builder, *begin)?;
                 b1.release();
                 let mut b2 = builder.add_branch("to");
-                self.recursive_dbg(builder, *begin);
+                self.recursive_dbg(builder, *begin)?;
                 b2.release();
                 let mut b3 = builder.add_branch("with stride");
                 b3.release();
@@ -439,7 +440,7 @@ impl IRInstructionSeq {
                 let IROp::EndBroadcast { begin: _, ret } = end else {
                     panic!("unreachable");
                 };
-                self.recursive_dbg(builder, *ret);
+                self.recursive_dbg(builder, *ret)?;
                 outer
             }
             IROp::Random(r) => match r {
@@ -449,11 +450,11 @@ impl IRInstructionSeq {
                 RandomOp::Permute { list, count, .. } => {
                     let b = builder.add_branch("Random Permute");
                     if let Some(c) = count {
-                        self.recursive_dbg(builder, *c);
+                        self.recursive_dbg(builder, *c)?;
                     } else {
                         builder.add_branch("single output");
                     }
-                    self.recursive_dbg(builder, *list);
+                    self.recursive_dbg(builder, *list)?;
                     b
                 }
                 RandomOp::Single => {
@@ -498,7 +499,7 @@ impl IRInstructionSeq {
                     bail!("Piecewise without an EndPiecewise!!");
                 };
                 let mut b5 = builder.add_branch("else");
-                self.recursive_dbg(builder, *default);
+                self.recursive_dbg(builder, *default)?;
                 b5.release();
                 b
             }
