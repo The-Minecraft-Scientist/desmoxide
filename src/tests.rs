@@ -1,7 +1,7 @@
 use std::{collections::HashMap, time::Instant};
 
 use crate::{
-    ast::parser::Expressions,
+    ast::expression_manager::Expressions,
     compile::frontend::Frontend,
     interop::{Expression, Graph, GraphState},
 };

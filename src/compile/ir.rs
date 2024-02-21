@@ -5,8 +5,8 @@ use strum::{AsRefStr, Display};
 
 use crate::{
     ast::{
-        parser::FnId, ASTNodeId, BinaryOp, Comparison, CoordinateAccess, Ident, ListOp, UnaryOp,
-        AST,
+        expression_manager::FnId, ASTNodeId, BinaryOp, Comparison, CoordinateAccess, Ident, ListOp,
+        UnaryOp, AST,
     },
     permute,
     util::Discard,

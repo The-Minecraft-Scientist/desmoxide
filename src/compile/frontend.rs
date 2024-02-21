@@ -3,7 +3,7 @@ use std::{collections::HashMap, fmt::Debug, hash::Hash};
 use super::ir::{ArgId, BroadcastArg, EndIndex, IRInstructionSeq, IROp, IRType, Id};
 use crate::{
     ast::{
-        parser::{Expressions, FnId},
+        expression_manager::{Expressions, FnId},
         ASTNode, ASTNodeId, BinaryOp, CoordinateAccess, Ident, List, ListOp, Opcode, UnaryOp,
         Value, AST,
     },
