@@ -298,7 +298,7 @@ impl<'a> Parser<'a> {
                 Token::Plus => Opcode::Add,
                 Token::Minus => Opcode::Sub,
                 Token::Mul => Opcode::Mul,
-                Token::Pow => {
+                Token::Superscript => {
                     self.lexer.discard()?;
                     assert_token_matches!(self.lexer, Token::LGroup);
                     let exp = self.parse_placed(0)?;
@@ -375,7 +375,7 @@ impl<'a> Parser<'a> {
                 }
                 _t => {
                     //This is super jank but we unconditionally pop the self.lexer every iteration so...
-                    self.lexer.push(("*", Token::Mul));
+                    self.lexer.push((&"*", Token::Mul));
                     Opcode::Mul
                 }
             };

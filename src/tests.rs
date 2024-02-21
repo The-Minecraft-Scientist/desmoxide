@@ -37,7 +37,7 @@ fn test_compile_fn(path: &'static str, func: &'static str) {
         val.instructions.len()
     );
 }
-fn parse_graph_exprs<'a>(exprs: &'a HashMap<u32, &'a str>) -> Expressions<'a> {
+pub fn parse_graph_exprs<'a>(exprs: &'a HashMap<u32, &'a str>) -> Expressions<'a> {
     let mut p = Expressions::new(exprs);
     let v = p.bench_test().unwrap();
     if v.len() > 0 {
@@ -46,7 +46,7 @@ fn parse_graph_exprs<'a>(exprs: &'a HashMap<u32, &'a str>) -> Expressions<'a> {
     }
     p
 }
-fn get_exprs<'a>(body: &'a GraphState) -> HashMap<u32, &'a str> {
+pub fn get_exprs<'a>(body: &'a GraphState) -> HashMap<u32, &'a str> {
     let mut m = HashMap::with_capacity(50);
     for expr in body.expressions.list.iter().enumerate() {
         if let Expression::Expression {

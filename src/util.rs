@@ -16,7 +16,7 @@ impl<'a, T> Iterator for LexIter<'a, T>
 where
     T: Logos<'a>,
 {
-    type Item = (&'a <<T as Logos<'a>>::Source as Source>::Slice, T);
+    type Item = (<<T as Logos<'a>>::Source as Source>::Slice<'a>, T);
 
     fn next(&mut self) -> Option<Self::Item> {
         let n = self.lexer.next()?.ok()?;

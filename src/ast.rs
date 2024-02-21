@@ -12,15 +12,15 @@ use strum::AsRefStr;
 
 use std::{
     fmt::Debug,
-    iter::{Enumerate, Map},
-    num::NonZeroUsize,
-    ops::{Deref, DerefMut, Index},
+    iter::{Enumerate, Map, Zip},
+    num::NonZeroU32,
+    ops::{Deref, DerefMut, Index, RangeFrom},
     slice::Iter,
 };
 use thin_vec::ThinVec;
 
 #[derive(Debug, Clone, Copy)]
-pub struct ASTNodeId(NonZeroUsize);
+pub struct ASTNodeId(NonZeroU32);
 
 #[derive(Clone, Debug, strum::AsRefStr)]
 //TODO: See about shrinking this
@@ -245,7 +245,7 @@ impl<'source> AST<'source> {
     }
     pub fn place(&mut self, node: ASTNode<'source>) -> ASTNodeId {
         self.push(node);
-        unsafe { ASTNodeId(NonZeroUsize::new_unchecked(self.len())) }
+        unsafe { ASTNodeId(NonZeroU32::new_unchecked(self.len() as u32)) }
     }
     pub fn get_node(&self, idx: ASTNodeId) -> Result<&ASTNode<'source>> {
         self.get(idx.0.get() as usize - 1)
@@ -261,15 +261,15 @@ impl<'source> AST<'source> {
     pub fn id_node_iter<'b>(
         &self,
     ) -> Map<
-        Enumerate<Iter<'_, ASTNode<'source>>>,
-        for<'a> fn((usize, &'a ASTNode<'source>)) -> (ASTNodeId, &'a ASTNode<'source>),
+        Zip<Iter<'_, ASTNode<'source>>, RangeFrom<u32>>,
+        for<'a> fn((&'a ASTNode<'source>, u32)) -> (ASTNodeId, &'a ASTNode<'source>),
     > {
-        self.iter().enumerate().map(Self::map_tuple)
+        self.iter().zip(0u32..).map(Self::map_tuple)
     }
-    fn map_tuple<'b>(t: (usize, &'b ASTNode<'source>)) -> (ASTNodeId, &'b ASTNode<'source>) {
+    fn map_tuple<'b>(t: (&'b ASTNode<'source>, u32)) -> (ASTNodeId, &'b ASTNode<'source>) {
         (
-            ASTNodeId(unsafe { NonZeroUsize::new_unchecked(t.0 + 1) }),
-            t.1,
+            ASTNodeId(unsafe { NonZeroU32::new_unchecked(t.1 + 1) }),
+            t.0,
         )
     }
     pub fn recursive_dbg(&self, builder: &mut TreeBuilder, nid: ASTNodeId) -> Result<()> {
