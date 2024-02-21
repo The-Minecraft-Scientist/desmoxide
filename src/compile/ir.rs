@@ -73,7 +73,7 @@ impl Id {
     }
     #[inline(always)]
     pub fn t(&self) -> IRType {
-        //SAFETY: inner is private, and it's highest byte always contains a valid value of IRType
+        //SAFETY: inner is private, and its' highest byte always contains a valid value of IRType
         unsafe { std::mem::transmute(self.inner.to_le_bytes()[3]) }
     }
     pub fn with_idx(&self, idx: u32) -> Self {
