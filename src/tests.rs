@@ -30,10 +30,11 @@ fn test_compile_fn(path: &'static str, func: &'static str) {
     let t = Instant::now();
     let val = f.direct_compile_fn(func).unwrap();
     let after = Instant::now();
-    //val.instructions.debug_print(val.ret.unwrap());
+    val.instructions.debug_print(val.ret.unwrap());
     println!(
-        "done in {:?} microseconds",
-        after.checked_duration_since(t).unwrap().as_micros()
+        "done in {:?} microseconds, compiled to {:?} instructions",
+        after.checked_duration_since(t).unwrap().as_micros(),
+        val.instructions.len()
     );
 }
 fn parse_graph_exprs<'a>(exprs: &'a HashMap<u32, &'a str>) -> Expressions<'a> {

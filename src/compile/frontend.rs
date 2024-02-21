@@ -49,13 +49,13 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
         let mut s = Scope::with_capacity(2);
         s.insert("x", x);
         s.insert("y", y);
-        frame.push_scope(s);
+        frame.push_scope(s); // Don't need to pop the root scope
         let ret_id = self.rec_build_ir(
             &mut segment,
             expr.root
                 .context("Tried to compile an AST that was not successfully parsed")?,
             expr,
-            &frame,
+            &mut frame,
         )?;
         segment.ret = Some(ret_id);
         Ok(segment)
@@ -82,8 +82,9 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
             expr.root
                 .context("Tried to compile an AST that was not parsed")?,
             expr,
-            &frame,
+            &mut frame,
         )?;
+        frame.pop_scope();
         segment.ret = Some(ret_id);
         Ok(segment)
     }
@@ -105,7 +106,7 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
         segment: &mut IRSegment,
         node: ASTNodeId,
         expr: &'borrow AST<'source>,
-        frame: &Frame,
+        frame: &mut Frame<'source>,
     ) -> Result<Id> {
         let res = match expr.get_node(node)? {
             ASTNode::Val(v) => match v {
@@ -116,7 +117,9 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
                         t
                     } else {
                         let a = self.ctx.ident_ast(&s)?;
-                        self.rec_build_ir(segment, a.root.unwrap(), a, frame)?
+                        let out = self.rec_build_ir(segment, a.root.unwrap(), a, frame)?;
+                        frame.insert_top(s.as_str(), out);
+                        out
                     }
                 }
             },
@@ -467,7 +470,7 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
         node: ASTNodeId,
         args: &ThinVec<ASTNodeId>,
         expr: &'borrow AST<'source>,
-        frame: &Frame,
+        frame: &mut Frame<'source>,
     ) -> Result<Id> {
         let mut iter = args.iter();
         let Some(initial) = iter.next() else {
@@ -627,6 +630,18 @@ impl<'a> Frame<'a> {
         Self {
             scopes: Vec::with_capacity(1),
         }
+    }
+    pub fn insert_top(&mut self, k: &'a str, v: Id) {
+        let s = match self.scopes.last_mut() {
+            Some(s) => s,
+            None => {
+                self.scopes.push(Scope {
+                    map: HashMap::with_capacity(1),
+                });
+                self.scopes.last_mut().unwrap()
+            }
+        };
+        s.insert(k, v);
     }
     pub fn push_scope(&mut self, scope: Scope<'a>) {
         self.scopes.push(scope);
