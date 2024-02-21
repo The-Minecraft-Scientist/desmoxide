@@ -92,7 +92,7 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
         let segment = self.compile_fn(&args, &argnames, ast)?;
         let t = segment.ret.unwrap().t();
         self.ctx.cache_compiled_fn(idx, t, segment)?;
-        Ok(FnId(idx, t))
+        Ok(FnId { idx, t })
     }
     pub fn direct_compile_fn(&mut self, i: &str) -> Result<IRSegment> {
         let id = self.ctx.fn_ident_id(i)?;

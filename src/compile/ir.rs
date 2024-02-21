@@ -144,6 +144,15 @@ pub enum RandomOp {
         seed: Option<Id>,
     },
 }
+impl RandomOp {
+    pub fn output_type(&self) -> IRType {
+        match self {
+            RandomOp::Single => IRType::Number,
+            RandomOp::Count { .. } => IRType::NumberList,
+            RandomOp::Permute { list, .. } => list.t().downcast_list().unwrap(),
+        }
+    }
+}
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EndIndex {
     Val(Id),
@@ -245,7 +254,7 @@ impl IROp {
             | IROp::CoordinateOf(..) => IRType::Number,
             //Passthrough types
             IROp::LoadBroadcastArg(BroadcastArg { t, .. })
-            | IROp::FnCall(FnId(_, t))
+            | IROp::FnCall(FnId { t, .. })
             | IROp::LoadArg(ArgId { t, .. }) => *t,
 
             IROp::BeginPiecewise { res: id, .. } | IROp::Ret(id) => id.t(),
@@ -271,11 +280,7 @@ impl IROp {
             IROp::Comparison { .. } => IRType::Bool,
             IROp::UnaryListOp(l, op) => op.ty(),
             //TODO: move these to helper functions on RandomOp
-            IROp::Random(op) => match op {
-                RandomOp::Single => IRType::Number,
-                RandomOp::Count { .. } => IRType::NumberList,
-                RandomOp::Permute { list, .. } => list.t().downcast_list().unwrap(),
-            },
+            IROp::Random(op) => op.output_type(),
             IROp::BinaryListOp(lhs, rhs, op) => {
                 match op {
                     BinaryListOp::Join => lhs.t(),
@@ -499,7 +504,7 @@ impl IRInstructionSeq {
                 b
             }
             IROp::FnCall(f) => {
-                let b = builder.add_branch(&format!("Function call (id {})", f.0));
+                let b = builder.add_branch(&format!("Function call (id {})", f.idx));
                 let mut it = self.backing[node.idx() as usize..].iter();
                 it.next().discard();
                 loop {

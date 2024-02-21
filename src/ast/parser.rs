@@ -17,7 +17,10 @@ use crate::{
     util::{multipeek::MultiPeek, LexIter},
 };
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct FnId(pub u32, pub IRType);
+pub struct FnId {
+    pub idx: u32,
+    pub t: IRType,
+}
 
 #[derive(Debug)]
 pub struct Expressions<'a> {
