@@ -165,28 +165,11 @@ impl<'a> Expressions<'a> {
         self.meta.insert(idx, meta);
         Ok(lexer)
     }
-    pub fn bench_test(&mut self) -> Result<Vec<Error>> {
-        let start = std::time::Instant::now();
-        let mut ctr = 0;
-        let mut problems = Vec::with_capacity(50);
-        for k in self.storage.keys() {
-            let p = self
-                .parse_expr(*k)
-                .context(format!("failed parsing line {}", k));
-            if !p.is_err() {
-                ctr += 1;
-            } else {
-                problems.push(p.unwrap_err());
-            }
+    pub fn parse_all(&mut self) -> Result<()> {
+        for i in self.storage.keys() {
+            self.parse_expr(*i)?;
         }
-        let end = std::time::Instant::now();
-        println!(
-            "successfully parsed {} out of {} expressions in {} microseconds",
-            ctr,
-            self.storage.len(),
-            end.checked_duration_since(start).unwrap().as_micros()
-        );
-        Ok(problems)
+        Ok(())
     }
     pub fn parse_expr(&mut self, idx: u32) -> Result<()> {
         let mut lex = self.scan_expression_type(idx)?;

@@ -1,8 +1,4 @@
-use std::{
-    cell::{RefCell},
-    collections::HashMap,
-    fmt::Debug,
-};
+use std::{cell::RefCell, collections::HashMap, fmt::Debug};
 use thin_vec::ThinVec;
 
 use crate::compile::{frontend::IRSegment, ir::IRType};
@@ -52,7 +48,7 @@ impl<'a> Debug for ExpressionType<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Fn { name, params } => {
-                let mut s = format!("Fn {}(", name.0.as_str());
+                let mut s = format!("Fn {}(", name.0);
                 for p in params {
                     s.push_str(&p.0);
                     s.push(',');

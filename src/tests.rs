@@ -39,11 +39,7 @@ fn test_compile_fn(path: &'static str, func: &'static str) {
 }
 pub fn parse_graph_exprs<'a>(exprs: &'a HashMap<u32, &'a str>) -> Expressions<'a> {
     let mut p = Expressions::new(exprs);
-    let v = p.bench_test().unwrap();
-    if v.len() > 0 {
-        eprintln!("test failed to parse the following expressions: {:?}", v);
-        panic!();
-    }
+    p.parse_all().unwrap();
     p
 }
 pub fn get_exprs<'a>(body: &'a GraphState) -> HashMap<u32, &'a str> {

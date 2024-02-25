@@ -2,7 +2,6 @@
 pub mod expression;
 pub mod expression_manager;
 pub mod parser;
-use crate::util::thin_str::ThinStr;
 use anyhow::{bail, Context, Result};
 //Re-export stuff from private scopes (used to keep enum name collisions down)
 
@@ -196,16 +195,16 @@ impl<'a> Debug for Value<'a> {
     }
 }
 #[derive(Clone, Debug)]
-pub struct Ident<'a>(ThinStr<'a>);
+pub struct Ident<'a>(&'a str);
 impl<'a> Ident<'a> {
     pub fn as_str(&self) -> &'a str {
-        self.0.as_str()
+        self.0
     }
 }
 impl<'a> Deref for Ident<'a> {
     type Target = str;
     fn deref(&self) -> &Self::Target {
-        self.0.deref()
+        self.0
     }
 }
 
@@ -299,8 +298,8 @@ impl<'source> AST<'source> {
         let _s = match n {
             ASTNode::Binary(a, b, c) => named_branch!(name, c.as_ref(), a, b),
             ASTNode::Unary(a, c) => named_branch!(name, c.as_ref(), a),
-            ASTNode::Parens(i, a) => named_branch!(name, i.0.as_str(), a),
-            ASTNode::FunctionCall(i, r) => named_branch_list!(name, i.0.as_str(), r),
+            ASTNode::Parens(i, a) => named_branch!(name, i.0, a),
+            ASTNode::FunctionCall(i, r) => named_branch_list!(name, i.0, r),
             ASTNode::Index(r, v) => named_branch!(name, "", r, v),
             ASTNode::List(l) => match l {
                 List::List(v) => named_branch_list!(name, "", v),
