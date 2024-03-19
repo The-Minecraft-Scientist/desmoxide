@@ -35,15 +35,19 @@ where
     pub unsafe fn find_unchecked(&self, val: T) -> T {
         self.set.find_unchecked(val.into()).into()
     }
+    #[inline]
     pub fn union(&self, val_a: T, val_b: T) -> T {
         self.set.join(val_a.into(), val_b.into()).into()
     }
+    #[inline]
     pub unsafe fn union_unchecked(&self, val_a: T, val_b: T) -> T {
         self.set.join_unchecked(val_a.into(), val_b.into()).into()
     }
+    #[inline]
     pub fn are_eq(&self, val_a: T, val_b: T) -> bool {
         self.set.nodes_eq(val_a.into(), val_b.into())
     }
+    #[inline]
     pub fn flatten(&self) {
         self.set.flatten()
     }
@@ -197,11 +201,7 @@ impl DisjointSetRaw {
         }
     }
     pub fn new_elem(&mut self) -> usize {
-        let i = self
-            .parents
-            .len()
-            .try_into()
-            .expect("overflow while adding subtree to DisjointSet");
+        let i = self.parents.len();
         self.parents.push(Cell::new(i));
         self.ranks.push(Cell::new(0));
         i

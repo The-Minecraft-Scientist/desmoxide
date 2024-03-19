@@ -34,3 +34,18 @@ macro_rules! permute {
         ($lhs, $rhs, $($other)*) | ($rhs, $lhs, $($other)*)
     };
 }
+#[macro_export]
+macro_rules! impl_trivial_conversion {
+    ($v:ident,$inner:ty) => {
+        impl From<$v> for $inner {
+            fn from(val: $v) -> $inner {
+                val.0
+            }
+        }
+        impl From<$inner> for $v {
+            fn from(val: $inner) -> $v {
+                $v(val)
+            }
+        }
+    };
+}

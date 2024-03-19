@@ -60,6 +60,7 @@ dependencies = [
  "debug_tree",
  "egg",
  "logos",
+ "nohash-hasher",
  "serde",
  "serde_json",
  "strum",
@@ -202,6 +203,12 @@ checksum = "dbfc0d229f1f42d790440136d941afd806bc9e949e2bcb8faa813b0f00d1267e"
 dependencies = [
  "logos-codegen",
 ]
+
+[[package]]
+name = "nohash-hasher"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2bf50223579dc7cdcfb3bfcacf7069ff68243f8c363f62ffa99cf000a6b9c451"
 
 [[package]]
 name = "once_cell"
