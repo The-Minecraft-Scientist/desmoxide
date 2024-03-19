@@ -51,7 +51,6 @@ pub struct ViewportMeta {
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum Expression {
     Expression {
-        //TODO: make Serialize impl compatible
         #[serde(deserialize_with = "deserialize_id")]
         id: u32,
         latex: Option<String>,

@@ -1,29 +1,26 @@
 //#![allow(unused)]
 pub mod expression;
-pub mod parse_manager;
+pub mod expression_manager;
 pub mod parser;
-use crate::util::thin_str::ThinStr;
 use anyhow::{bail, Context, Result};
 //Re-export stuff from private scopes (used to keep enum name collisions down)
-pub use ast_impl::*;
-pub use bp::*;
+
 use debug_tree::{AsTree, TreeBuilder, TreeConfig, TreeSymbols};
 use strum::AsRefStr;
 
 use std::{
     fmt::Debug,
-    iter::{Enumerate, Map},
-    num::NonZeroUsize,
-    ops::{Deref, DerefMut, Index},
+    iter::{Map, Zip},
+    num::NonZeroU32,
+    ops::{Deref, DerefMut, Index, RangeFrom},
     slice::Iter,
 };
 use thin_vec::ThinVec;
 
 #[derive(Debug, Clone, Copy)]
-pub struct ASTNodeId(NonZeroUsize);
+pub struct ASTNodeId(NonZeroU32);
 
 #[derive(Clone, Debug, strum::AsRefStr)]
-//TODO: See about shrinking this
 pub enum ASTNode<'a> {
     Val(Value<'a>),
     Binary(ASTNodeId, ASTNodeId, BinaryOp),
@@ -198,16 +195,16 @@ impl<'a> Debug for Value<'a> {
     }
 }
 #[derive(Clone, Debug)]
-pub struct Ident<'a>(ThinStr<'a>);
+pub struct Ident<'a>(&'a str);
 impl<'a> Ident<'a> {
     pub fn as_str(&self) -> &'a str {
-        self.0.as_str()
+        self.0
     }
 }
 impl<'a> Deref for Ident<'a> {
     type Target = str;
     fn deref(&self) -> &Self::Target {
-        self.0.deref()
+        self.0
     }
 }
 
@@ -245,7 +242,7 @@ impl<'source> AST<'source> {
     }
     pub fn place(&mut self, node: ASTNode<'source>) -> ASTNodeId {
         self.push(node);
-        unsafe { ASTNodeId(NonZeroUsize::new_unchecked(self.len())) }
+        unsafe { ASTNodeId(NonZeroU32::new_unchecked(self.len() as u32)) }
     }
     pub fn get_node(&self, idx: ASTNodeId) -> Result<&ASTNode<'source>> {
         self.get(idx.0.get() as usize - 1)
@@ -261,15 +258,15 @@ impl<'source> AST<'source> {
     pub fn id_node_iter<'b>(
         &self,
     ) -> Map<
-        Enumerate<Iter<'_, ASTNode<'source>>>,
-        for<'a> fn((usize, &'a ASTNode<'source>)) -> (ASTNodeId, &'a ASTNode<'source>),
+        Zip<Iter<'_, ASTNode<'source>>, RangeFrom<u32>>,
+        for<'a> fn((&'a ASTNode<'source>, u32)) -> (ASTNodeId, &'a ASTNode<'source>),
     > {
-        self.iter().enumerate().map(Self::map_tuple)
+        self.iter().zip(0u32..).map(Self::map_tuple)
     }
-    fn map_tuple<'b>(t: (usize, &'b ASTNode<'source>)) -> (ASTNodeId, &'b ASTNode<'source>) {
+    fn map_tuple<'b>(t: (&'b ASTNode<'source>, u32)) -> (ASTNodeId, &'b ASTNode<'source>) {
         (
-            ASTNodeId(unsafe { NonZeroUsize::new_unchecked(t.0 + 1) }),
-            t.1,
+            ASTNodeId(unsafe { NonZeroU32::new_unchecked(t.1 + 1) }),
+            t.0,
         )
     }
     pub fn recursive_dbg(&self, builder: &mut TreeBuilder, nid: ASTNodeId) -> Result<()> {
@@ -301,8 +298,8 @@ impl<'source> AST<'source> {
         let _s = match n {
             ASTNode::Binary(a, b, c) => named_branch!(name, c.as_ref(), a, b),
             ASTNode::Unary(a, c) => named_branch!(name, c.as_ref(), a),
-            ASTNode::Parens(i, a) => named_branch!(name, i.0.as_str(), a),
-            ASTNode::FunctionCall(i, r) => named_branch_list!(name, i.0.as_str(), r),
+            ASTNode::Parens(i, a) => named_branch!(name, i.0, a),
+            ASTNode::FunctionCall(i, r) => named_branch_list!(name, i.0, r),
             ASTNode::Index(r, v) => named_branch!(name, "", r, v),
             ASTNode::List(l) => match l {
                 List::List(v) => named_branch_list!(name, "", v),

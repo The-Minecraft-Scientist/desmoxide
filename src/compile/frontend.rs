@@ -1,17 +1,17 @@
-use std::{collections::HashMap, fmt::Debug, hash::Hash};
+use std::{collections::HashMap, fmt::Debug};
 
 use super::ir::{ArgId, BroadcastArg, EndIndex, IRInstructionSeq, IROp, IRType, Id};
 use crate::{
     ast::{
-        parser::{Expressions, FnId},
-        ASTNode, ASTNodeId, BinaryOp, CoordinateAccess, Ident, List, ListOp, Opcode, UnaryOp,
+        expression_manager::{Expressions, FnId},
+        ASTNode, ASTNodeId, BinaryOp, CoordinateAccess, Ident, List, ListOp, UnaryOp,
         Value, AST,
     },
     compile::ir::BinaryListOp,
     compiler_error, permute,
 };
 use anyhow::{bail, Context, Result};
-use debug_tree::TreeBuilder;
+
 use thin_vec::ThinVec;
 
 #[derive(Debug)]
@@ -38,24 +38,24 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
     pub fn compile_expr(&mut self, expr: &'borrow AST<'source>) -> Result<IRSegment> {
         let mut frame = Frame::empty();
         let mut segment = IRSegment::new(vec![IRType::Number, IRType::Number]);
-        let x = segment.instructions.place(IROp::LoadArg(ArgId(Id {
+        let x = segment.instructions.place(IROp::LoadArg(ArgId {
             idx: 0,
             t: IRType::Number,
-        })));
-        let y = segment.instructions.place(IROp::LoadArg(ArgId(Id {
+        }));
+        let y = segment.instructions.place(IROp::LoadArg(ArgId {
             idx: 1,
             t: IRType::Number,
-        })));
+        }));
         let mut s = Scope::with_capacity(2);
         s.insert("x", x);
         s.insert("y", y);
-        frame.push_scope(s);
+        frame.push_scope(s); // Don't need to pop the root scope
         let ret_id = self.rec_build_ir(
             &mut segment,
             expr.root
                 .context("Tried to compile an AST that was not successfully parsed")?,
             expr,
-            &frame,
+            &mut frame,
         )?;
         segment.ret = Some(ret_id);
         Ok(segment)
@@ -70,10 +70,10 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
         let mut scope = Scope::with_capacity(args.len());
         let mut segment = IRSegment::new(arg_types.clone());
         for (index, ident) in args.iter().enumerate() {
-            let arg = segment.instructions.place(IROp::LoadArg(ArgId(Id {
-                idx: index as u32,
+            let arg = segment.instructions.place(IROp::LoadArg(ArgId {
+                idx: index.try_into()?,
                 t: arg_types[index],
-            })));
+            }));
             scope.insert(ident.as_str(), arg);
         }
         frame.push_scope(scope);
@@ -82,22 +82,23 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
             expr.root
                 .context("Tried to compile an AST that was not parsed")?,
             expr,
-            &frame,
+            &mut frame,
         )?;
+        frame.pop_scope();
         segment.ret = Some(ret_id);
         Ok(segment)
     }
     pub fn compile_and_cache_fn(&mut self, idx: u32, args: Vec<IRType>) -> Result<FnId> {
         let (argnames, ast) = self.ctx.fn_ident_ast(idx)?;
         let segment = self.compile_fn(&args, &argnames, ast)?;
-        let t = segment.ret.unwrap().t;
+        let t = segment.ret.unwrap().t();
         self.ctx.cache_compiled_fn(idx, t, segment)?;
-        Ok(FnId(idx, t))
+        Ok(FnId { idx, t })
     }
     pub fn direct_compile_fn(&mut self, i: &str) -> Result<IRSegment> {
         let id = self.ctx.fn_ident_id(i)?;
         let (args, ast) = self.ctx.fn_ident_ast(id)?;
-        let mut v = vec![IRType::Number; args.len()];
+        let v = vec![IRType::Number; args.len()];
         self.compile_fn(&v, args, ast)
     }
     fn rec_build_ir(
@@ -105,7 +106,7 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
         segment: &mut IRSegment,
         node: ASTNodeId,
         expr: &'borrow AST<'source>,
-        frame: &Frame,
+        frame: &mut Frame<'source>,
     ) -> Result<Id> {
         let res = match expr.get_node(node)? {
             ASTNode::Val(v) => match v {
@@ -116,14 +117,16 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
                         t
                     } else {
                         let a = self.ctx.ident_ast(&s)?;
-                        self.rec_build_ir(segment, a.root.unwrap(), a, frame)?
+                        let out = self.rec_build_ir(segment, a.root.unwrap(), a, frame)?;
+                        frame.insert_top(s.as_str(), out);
+                        out
                     }
                 }
             },
             ASTNode::Binary(arg0, arg1, op) => {
                 let arg0 = self.rec_build_ir(segment, *arg0, expr, frame)?;
                 let arg1 = self.rec_build_ir(segment, *arg1, expr, frame)?;
-                match (arg0.t.downcast_list(), arg1.t.downcast_list()) {
+                match (arg0.t().downcast_list(), arg1.t().downcast_list()) {
                     // List [op] Value
                     (Some(t), None) => {
                         self.build_broadcast_binary(segment, node, arg0, t, arg1, op)?
@@ -177,7 +180,7 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
             }
             ASTNode::Unary(v, op) => {
                 let inner = self.rec_build_ir(segment, *v, expr, frame)?;
-                if let Some(lt) = inner.t.downcast_list() {
+                if let Some(lt) = inner.t().downcast_list() {
                     let begin = segment.instructions.place(IROp::BeginBroadcast {
                         inner_type: lt,
                         end_index: EndIndex::Full,
@@ -213,7 +216,7 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
                 }
                 //function call
                 if let Ok(idx) = self.ctx.fn_ident_id(ident.as_str()) {
-                    let t = self.compile_and_cache_fn(idx, vec![rhs.t])?;
+                    let t = self.compile_and_cache_fn(idx, vec![rhs.t()])?;
                     let id = segment.instructions.place(IROp::FnCall(t));
                     segment.instructions.push(IROp::FnArg(rhs));
                     return Ok(id);
@@ -231,7 +234,7 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
                 }
                 let fn_id = self.compile_and_cache_fn(
                     self.ctx.fn_ident_id(f.as_str())?,
-                    args.iter().map(|id| id.t).collect::<Vec<_>>(),
+                    args.iter().map(|id| id.t()).collect::<Vec<_>>(),
                 )?;
                 let id = segment.instructions.place(IROp::FnCall(fn_id));
                 let _ = segment
@@ -241,9 +244,10 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
             }
             ASTNode::Index(list, index) => {
                 let l = self.rec_build_ir(segment, *list, expr, frame)?;
-                let inner_type =
-                    l.t.downcast_list()
-                        .context("expected a list, got a value")?;
+                let inner_type = l
+                    .t()
+                    .downcast_list()
+                    .context("expected a list, got a value")?;
                 match expr.get_node(*index)? {
                     //List filter
                     ASTNode::Comparison(rhs, comp, lhs) => {
@@ -253,7 +257,7 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
                             inner_type,
                             end_index: EndIndex::Full,
                         });
-                        let arg = BroadcastArg { t: l.t, id: 0 };
+                        let arg = BroadcastArg { t: l.t(), id: 0 };
                         segment.instructions.push(IROp::SetBroadcastArg(l, arg));
                         let val = segment.instructions.place(IROp::LoadBroadcastArg(arg));
                         let comp_lhs = self.rec_build_ir(segment, *lhs, expr, frame)?;
@@ -274,11 +278,11 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
                         begin
                     }
                     //normal indexing
-                    a => {
+                    _a => {
                         //TODO: type assertions
                         let idx_val = self.rec_build_ir(segment, *index, expr, frame)?;
                         //Need to broadcast this index op
-                        if idx_val.t == IRType::NumberList {
+                        if idx_val.t() == IRType::NumberList {
                             let header = segment.instructions.place(IROp::BeginBroadcast {
                                 inner_type,
                                 end_index: EndIndex::Full,
@@ -312,8 +316,8 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
                 }
             }
             ASTNode::List(l) => match l {
-                List::ListComp(expr, vals) => todo!(),
-                List::Range(begin, end) => todo!(),
+                List::ListComp(_expr, _vals) => todo!(),
+                List::Range(_begin, _end) => todo!(),
                 List::List(exprs) => {
                     let mut it = exprs.iter();
                     let Some(head) = it.next() else {
@@ -361,7 +365,7 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
                     let mut it = v.iter();
                     if let Some(first) = it.next() {
                         let first = self.rec_build_ir(segment, *first, expr, frame)?;
-                        if let Some(_) = first.t.downcast_list() {
+                        if let Some(_) = first.t().downcast_list() {
                             if let Some(second) = it.next() {
                                 let second = self.rec_build_ir(segment, *second, expr, frame)?;
                                 let seed;
@@ -463,10 +467,10 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
     fn join_list_args(
         &mut self,
         segment: &mut IRSegment,
-        node: ASTNodeId,
+        _node: ASTNodeId,
         args: &ThinVec<ASTNodeId>,
         expr: &'borrow AST<'source>,
-        frame: &Frame,
+        frame: &mut Frame<'source>,
     ) -> Result<Id> {
         let mut iter = args.iter();
         let Some(initial) = iter.next() else {
@@ -489,14 +493,14 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
         arg1: Id,
         op: BinaryOp,
     ) -> Result<Id> {
-        Ok(match (arg0.t, arg1.t, op) {
+        Ok(match (arg0.t(), arg1.t(), op) {
             (IRType::Number, IRType::Number, _) => {
                 segment.instructions.place(IROp::Binary(arg0, arg1, op))
             }
             permute!(IRType::Number, IRType::Vec2, BinaryOp::Mul)
             | (IRType::Vec2, IRType::Number, BinaryOp::Div) => {
                 let (x, y, number);
-                if arg0.t == IRType::Vec2 {
+                if arg0.t() == IRType::Vec2 {
                     (x, y) = segment.instructions.coordinates_of2d(arg0);
                     number = arg1;
                 } else {
@@ -509,7 +513,7 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
             }
             permute!(IRType::Number, IRType::Vec3, BinaryOp::Mul | BinaryOp::Div) => {
                 let (x, y, z, number);
-                if arg0.t == IRType::Vec3 {
+                if arg0.t() == IRType::Vec3 {
                     (x, y, z) = segment.instructions.coordinates_of3d(arg0);
                     number = arg1;
                 } else {
@@ -518,7 +522,7 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
                 }
                 let xn = segment.instructions.place(IROp::Binary(x, number, op));
                 let yn = segment.instructions.place(IROp::Binary(y, number, op));
-                let zn = segment.instructions.place(IROp::Binary(z, number, op));
+                let _zn = segment.instructions.place(IROp::Binary(z, number, op));
                 segment.instructions.place(IROp::Vec2(xn, yn))
             }
             //TODO: better compiler errors here
@@ -527,13 +531,13 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
                     node,
                     "operation {:?} cannot be called on a {}{:?} and a {}{:?}",
                     c,
-                    if arg0.t.downcast_list().is_some() {
+                    if arg0.t().downcast_list().is_some() {
                         "list of "
                     } else {
                         ""
                     },
                     a,
-                    if arg1.t.downcast_list().is_some() {
+                    if arg1.t().downcast_list().is_some() {
                         "list of "
                     } else {
                         ""
@@ -550,7 +554,7 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
         val: Id,
         op: UnaryOp,
     ) -> Result<Id> {
-        Ok(match (val.t, op) {
+        Ok(match (val.t(), op) {
             //Special case for unary negation. All other unary operations are disallowed on points
             (IRType::Vec2, UnaryOp::Neg) => {
                 let x = segment
@@ -601,7 +605,7 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
             end_index: EndIndex::Full,
         });
         let arg0_bcd = BroadcastArg { t, id: 0 };
-        let arg1_bcd = BroadcastArg { t: arg1.t, id: 1 };
+        let arg1_bcd = BroadcastArg { t: arg1.t(), id: 1 };
         segment
             .instructions
             .push(IROp::SetBroadcastArg(arg0, arg0_bcd));
@@ -626,6 +630,18 @@ impl<'a> Frame<'a> {
         Self {
             scopes: Vec::with_capacity(1),
         }
+    }
+    pub fn insert_top(&mut self, k: &'a str, v: Id) {
+        let s = match self.scopes.last_mut() {
+            Some(s) => s,
+            None => {
+                self.scopes.push(Scope {
+                    map: HashMap::with_capacity(1),
+                });
+                self.scopes.last_mut().unwrap()
+            }
+        };
+        s.insert(k, v);
     }
     pub fn push_scope(&mut self, scope: Scope<'a>) {
         self.scopes.push(scope);

@@ -164,8 +164,8 @@ impl DisjointSetRaw {
         let mut a = self.find(x);
         let mut b = self.find(y);
         //SAFETY: self.find(x) guarantees its result is in-bounds
-        let mut a_rank = unsafe { self.rank_unchecked(a) }.get();
-        let mut b_rank = unsafe { self.rank_unchecked(b) }.get();
+        let a_rank = unsafe { self.rank_unchecked(a) }.get();
+        let b_rank = unsafe { self.rank_unchecked(b) }.get();
         if b_rank >= a_rank {
             mem::swap(&mut a, &mut b);
         }
@@ -182,8 +182,8 @@ impl DisjointSetRaw {
         let mut a = self.find_unchecked(x);
         let mut b = self.find_unchecked(y);
         //SAFETY: self.find(x) guarantees its result is in-bounds
-        let mut a_rank = unsafe { self.rank_unchecked(a) }.get();
-        let mut b_rank = unsafe { self.rank_unchecked(b) }.get();
+        let a_rank = unsafe { self.rank_unchecked(a) }.get();
+        let b_rank = unsafe { self.rank_unchecked(b) }.get();
         if b_rank >= a_rank {
             mem::swap(&mut a, &mut b);
         }

@@ -1,8 +1,10 @@
-pub use categories::*;
-//TODO add Infinity, Sum, Product, Integral tokens
+
+
 /// Lexer token
+#[non_exhaustive]
 #[derive(logos::Logos, Debug, PartialEq, Clone, Copy)]
-#[logos(skip r"[ \t\n\f]+|\\+left|\\+right")]
+//#[logos(skip r"[ \t\n\f]+|\\+left|\\+right" )]
+#[logos(skip r"[ \t\n\f]+")]
 pub enum Token {
     // LITERALS --------------------------------------------
     /// Floating point literal
@@ -14,12 +16,10 @@ pub enum Token {
     IntegerLit(i64),
 
     // IDENTIFIERS -----------------------------------------
-    //Unrecognized LaTeX command; Treated as an identifer.
-    #[regex(r"\\[a-zA-Z]+(_\{[a-zA-Z]+\})?", priority = 0)]
-    //Single letter
-    #[regex("[a-zA-Z]")]
-    //name with subscript:
-    #[regex(r"[a-zA-Z]_\{[a-zA-Z0-9\.]+\}", priority = 0)]
+    // Unrecognized LaTeX command; Treated as an identifer. (this is disabled for now because it seems to turn logos into a dummy)
+    //#[regex(r"\\[a-zA-Z]+(_\{[a-zA-Z]+\})?", priority = 2, callback = |a| println!("matched latex command");)]
+    // Variable name in the form "v" (single letter) or "v_{blah}"
+    #[regex(r"[a-zA-Z](_\{[a-zA-Z0-9]+\})?", priority = 2)]
     /// Variable identifier
     Ident,
 
@@ -44,6 +44,8 @@ pub enum Token {
     Colon,
     #[token("_")]
     Subscript,
+    #[token("^")]
+    Superscript,
 
     // COMPARISON OPERATORS --------------------------------
     #[token(r"=")]
@@ -74,14 +76,20 @@ pub enum Token {
     #[token(r"\cdot")]
     #[token("*")]
     Mul,
-    #[token("^")]
-    Pow,
     #[token("...")]
     Range,
     #[token(".")]
     Dot,
     #[token(r"\sqrt")]
     Sqrt,
+    #[token(r"\sum")]
+    Sum,
+    #[token(r"\prod")]
+    Prod,
+    #[token(r"\int")]
+    Integral,
+    #[regex(r"\\frac\{d\}\{\d[a-zA-Z](_\{[a-zA-Z0-9]+\})?\}", priority = 3)]
+    Derivative,
 
     // BUILTINS --------------------------------------------
     #[token(r"\operatorname{random}")]
@@ -136,7 +144,9 @@ pub enum Token {
     Floor,
     #[token(r"\operatorname{ceil}")]
     Ceil,
-
+    // SPECIAL VALUES --------------------------------------------
+    #[token(r"\infty")]
+    Infty,
     #[token(r"\left", callback = logos::skip, priority = 10000)]
     #[token(r"\\left", callback = logos::skip, priority = 10000)]
     #[token(r"\right", callback = logos::skip, priority = 10000)]

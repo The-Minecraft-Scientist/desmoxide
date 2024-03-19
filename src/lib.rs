@@ -6,4 +6,4 @@ pub mod lexer;
 pub mod util;
 
 #[cfg(test)]
-mod tests;
+pub mod tests;
