@@ -1,5 +1,3 @@
-
-
 /// Lexer token
 #[non_exhaustive]
 #[derive(logos::Logos, Debug, PartialEq, Clone, Copy)]
@@ -156,7 +154,7 @@ pub enum Token {
 mod categories {
     use anyhow::{bail, Result};
 
-    use crate::ast::{Comparison, Opcode};
+    use crate::lang::ast::{Comparison, Opcode};
 
     use super::Token;
     use super::Token::*;

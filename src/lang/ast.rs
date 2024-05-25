@@ -1,7 +1,3 @@
-//#![allow(unused)]
-pub mod expression;
-pub mod expression_manager;
-pub mod parser;
 use anyhow::{bail, Context, Result};
 //Re-export stuff from private scopes (used to keep enum name collisions down)
 
@@ -52,8 +48,9 @@ mod ast_impl {
     use anyhow::{bail, Result};
     use thin_vec::ThinVec;
 
-    use crate::lexer::Token;
-    use crate::lexer::Token::*;
+    use crate::lang::lexer::Token;
+
+    use crate::lang::lexer::Token::*;
 
     use super::{ASTNode as AN, ASTNodeId, BinaryOp as B, ListOp, Opcode as OP, UnaryOp as U};
 

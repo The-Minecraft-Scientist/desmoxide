@@ -1,10 +1,9 @@
-use std::{collections::HashMap, time::Instant};
-
 use crate::{
-    ast::expression_manager::Expressions,
-    compile::frontend::Frontend,
+    graph::expressions::Expressions,
     interop::{Expression, GraphState},
+    lang::compiler::frontend::Frontend,
 };
+use std::{collections::HashMap, time::Instant};
 
 #[test]
 fn test_parse_simplex_4d() {

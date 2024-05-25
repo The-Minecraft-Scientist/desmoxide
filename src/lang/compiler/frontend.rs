@@ -1,39 +1,24 @@
 use std::{collections::HashMap, fmt::Debug};
 
-use super::ir::{ArgId, BroadcastArg, EndIndex, IRInstructionSeq, IROp, IRType, Id};
-use crate::{
-    ast::{
-        expression_manager::{Expressions, FnId},
-        ASTNode, ASTNodeId, BinaryOp, CoordinateAccess, Ident, List, ListOp, UnaryOp,
-        Value, AST,
+use super::{
+    super::ast::{
+        ASTNode, ASTNodeId, BinaryOp, CoordinateAccess, Ident, List, ListOp, UnaryOp, Value, AST,
     },
-    compile::ir::BinaryListOp,
-    compiler_error, permute,
+    expression_provider::ExpressionProvider,
+    ir::{
+        ArgId, BinaryListOp, BroadcastArg, EndIndex, IRInstructionSeq, IROp, IRSegment, IRType, Id,
+    },
 };
+use crate::{compiler_error, permute};
 use anyhow::{bail, Context, Result};
 
 use thin_vec::ThinVec;
 
 #[derive(Debug)]
 pub struct Frontend<'borrow, 'source> {
-    pub ctx: &'borrow Expressions<'source>,
+    pub ctx: &'borrow dyn ExpressionProvider<'source>,
 }
-/// Contains a standalone executable IR sequence along with metadata about its arguments and their types
-#[derive(Debug, Clone)]
-pub struct IRSegment {
-    pub args: Vec<IRType>,
-    pub instructions: IRInstructionSeq,
-    pub ret: Option<Id>,
-}
-impl IRSegment {
-    pub fn new(args: Vec<IRType>) -> Self {
-        Self {
-            args,
-            instructions: IRInstructionSeq::new(),
-            ret: None,
-        }
-    }
-}
+
 impl<'borrow, 'source> Frontend<'borrow, 'source> {
     pub fn compile_expr(&mut self, expr: &'borrow AST<'source>) -> Result<IRSegment> {
         let mut frame = Frame::empty();

@@ -1,8 +1,7 @@
 #![allow(unused)]
-pub mod ast;
-pub mod compile;
+pub mod graph;
 pub mod interop;
-pub mod lexer;
+pub mod lang;
 pub mod util;
 
 #[cfg(test)]

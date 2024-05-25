@@ -1,13 +1,31 @@
+use std::{num::NonZeroU32, sync::Arc};
+
 use anyhow::{bail, Context, Result};
+use arc_swap::ArcSwap;
 use debug_tree::TreeBuilder;
 
 use strum::{AsRefStr, Display};
 
-use crate::{
-    ast::{expression_manager::FnId, BinaryOp, Comparison, CoordinateAccess, UnaryOp},
-    util::Discard,
-};
+use super::super::ast::{BinaryOp, Comparison, CoordinateAccess, UnaryOp};
+use crate::{graph::expressions::FnId, util::Discard};
 
+/// Contains a standalone executable IR sequence along with metadata about its arguments and their types
+#[derive(Debug, Clone)]
+pub struct IRSegment {
+    pub args: Vec<IRType>,
+    pub dependencies: Vec,
+    pub instructions: IRInstructionSeq,
+    pub ret: Option<Id>,
+}
+impl IRSegment {
+    pub fn new(args: Vec<IRType>) -> Self {
+        Self {
+            args,
+            instructions: IRInstructionSeq::new(),
+            ret: None,
+        }
+    }
+}
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u8)]
 pub enum IRType {
@@ -55,32 +73,28 @@ impl IRType {
 /// Identifies a numeric argument to the relevant IRChunk by index in the argument list
 #[derive(Debug, Clone, Copy)]
 pub struct Id {
-    inner: u32,
+    inner: NonZeroU32,
 }
 
 impl Id {
     pub const INDEX_MASK: u32 = 0xFFFFFF;
-    pub fn new(idx: u32, t: IRType) -> Self {
-        assert!(idx <= Self::INDEX_MASK);
-
+    #[inline]
+    pub fn new(mut idx: u32, t: IRType) -> Self {
+        assert!(idx <= Self::INDEX_MASK - 1, "IR Opcode ID Overflowed");
+        idx += 1;
         Self {
-            inner: idx | ((t as u8 as u32) << 24),
+            //SAFETY: we have ensured idx is non-zero by ensuring it will not overflow and incrementing by one
+            inner: unsafe { NonZeroU32::new_unchecked(idx | ((t as u8 as u32) << 24)) },
         }
     }
     #[inline(always)]
     pub fn idx(&self) -> u32 {
-        self.inner & Self::INDEX_MASK
+        (self.inner.get() & Self::INDEX_MASK) - 1
     }
     #[inline(always)]
     pub fn t(&self) -> IRType {
         //SAFETY: inner is private, and it's highest byte always contains a valid value of IRType
-        unsafe { std::mem::transmute(self.inner.to_le_bytes()[3]) }
-    }
-    pub fn with_idx(&self, idx: u32) -> Self {
-        assert!(idx <= Self::INDEX_MASK);
-        Self {
-            inner: (self.inner & !Self::INDEX_MASK) | idx,
-        }
+        unsafe { std::mem::transmute(self.inner.get().to_le_bytes()[3]) }
     }
 }
 impl PartialEq for Id {
@@ -175,6 +189,7 @@ pub struct ArgId {
 pub enum IROp {
     ///No-op, used to generate a valid Never value to point to without actually invoking a control flow instruction
     Nop,
+    //Binary operation between two arguments
     Binary(Id, Id, BinaryOp),
     Unary(Id, UnaryOp),
     UnaryListOp(Id, UnaryListOp),
@@ -233,9 +248,9 @@ pub enum IROp {
     },
     /// Call a function
     FnCall(FnId),
-    /// FnArg is of Never type. to refer to the output of a function, please refer to its parent FnCall instruction
+    /// Define an argument to be passed into a function call
     FnArg(Id),
-    /// Return the value stored
+    /// Return the value stored in this register
     Ret(Id),
 }
 impl IROp {

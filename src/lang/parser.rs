@@ -2,12 +2,16 @@ use thin_vec::{thin_vec, ThinVec};
 
 use anyhow::{bail, Context, Result};
 
-use super::{ASTNode, ASTNodeId, CoordinateAccess::*, Ident, ListCompInfo, AST};
-use crate::{
-    assert_token_matches,
-    ast::{BinaryOp, List, ListOp, Opcode, PiecewiseEntry, UnaryOp, Value},
-    bad_token,
+use super::{
+    ast::{
+        ASTNode, ASTNodeId, BinaryOp, CoordinateAccess::*, Ident, List, ListCompInfo, ListOp,
+        Opcode, PiecewiseEntry, UnaryOp, Value, AST,
+    },
     lexer::Token,
+};
+
+use crate::{
+    assert_token_matches, bad_token,
     util::{multipeek::MultiPeek, LexIter},
 };
 
@@ -147,10 +151,9 @@ impl<'a> Parser<'a> {
             Token::IntegerLit(i) => ASTNode::Val(i.into()),
             Token::FloatLit(f) => ASTNode::Val(f.into()),
             //Prefix negation
-            Token::Minus => ASTNode::Unary(
-                self.parse_placed(*Opcode::Neg.prefix_bp()?)?,
-                super::UnaryOp::Neg,
-            ),
+            Token::Minus => {
+                ASTNode::Unary(self.parse_placed(*Opcode::Neg.prefix_bp()?)?, UnaryOp::Neg)
+            }
             Token::LGroup => {
                 if self.lexer.peek_next_res()?.1 == Token::RGroup {
                     self.lexer.discard()?;
