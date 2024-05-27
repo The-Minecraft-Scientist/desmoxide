@@ -1,7 +1,6 @@
 use std::{collections::HashMap, num::NonZeroU32, sync::Arc};
 
 use anyhow::{bail, Context, Result};
-use arc_swap::ArcSwap;
 use debug_tree::TreeBuilder;
 
 use shrinkwraprs::Shrinkwrap;
