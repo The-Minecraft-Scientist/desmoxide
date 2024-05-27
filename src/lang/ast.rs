@@ -13,6 +13,8 @@ use std::{
 };
 use thin_vec::ThinVec;
 
+use crate::util::thin_str::ThinStr;
+
 #[derive(Debug, Clone, Copy)]
 pub struct ASTNodeId(NonZeroU32);
 
@@ -192,16 +194,16 @@ impl<'a> Debug for Value<'a> {
     }
 }
 #[derive(Clone, Debug)]
-pub struct Ident<'a>(&'a str);
+pub struct Ident<'a>(ThinStr<'a>);
 impl<'a> Ident<'a> {
     pub fn as_str(&self) -> &'a str {
-        self.0
+        self.0.as_slice()
     }
 }
 impl<'a> Deref for Ident<'a> {
     type Target = str;
     fn deref(&self) -> &Self::Target {
-        self.0
+        &self.0
     }
 }
 
@@ -222,7 +224,7 @@ impl<'a> From<&'a str> for Value<'a> {
 }
 impl<'a> From<&'a str> for Ident<'a> {
     fn from(value: &'a str) -> Self {
-        Ident(value.into())
+        Ident(ThinStr::from_slice(value))
     }
 }
 #[derive(Clone)]
@@ -385,8 +387,8 @@ pub enum Opcode {
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct InfixBP {
-    left: u8,
-    right: u8,
+    pub left: u8,
+    pub right: u8,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PrefixBP(u8);

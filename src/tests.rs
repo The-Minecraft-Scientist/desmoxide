@@ -1,7 +1,8 @@
 use crate::{
     graph::expressions::Expressions,
     interop::{Expression, GraphState},
-    lang::compiler::frontend::Frontend,
+    lang::compiler::{expression_provider::ExpressionId, frontend::Frontend},
+    util::thin_str::ThinStr,
 };
 use std::{collections::HashMap, time::Instant};
 
@@ -20,12 +21,19 @@ fn test_compile_simplex() {
 fn test_compile_listmul() {
     test_compile_fn("tests/listmul.json", "g");
 }
+#[test]
+fn test_thin_str_soundness() {
+    let teststr = String::from_utf8(vec![b'a'; ThinStr::MAX_SLICE_LEN + 1]).unwrap();
+    dbg!(&teststr);
+    let s = ThinStr::from_slice(&teststr);
+    println!("{}", s);
+}
 
 fn test_compile_fn(path: &'static str, func: &'static str) {
     let graph = serde_json::de::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
     let exprs = get_exprs(&graph);
     let p = parse_graph_exprs(&exprs);
-    let mut f = Frontend { ctx: &p };
+    let mut f = Frontend::new(&p);
     let t = Instant::now();
     let val = f.direct_compile_fn(func).unwrap();
     let after = Instant::now();
@@ -36,12 +44,12 @@ fn test_compile_fn(path: &'static str, func: &'static str) {
         val.instructions.len()
     );
 }
-pub fn parse_graph_exprs<'a>(exprs: &'a HashMap<u32, &'a str>) -> Expressions<'a> {
+pub fn parse_graph_exprs<'a>(exprs: &'a HashMap<ExpressionId, &'a str>) -> Expressions<'a> {
     let mut p = Expressions::new(exprs);
     p.parse_all().unwrap();
     p
 }
-pub fn get_exprs<'a>(body: &'a GraphState) -> HashMap<u32, &'a str> {
+pub fn get_exprs<'a>(body: &'a GraphState) -> HashMap<ExpressionId, &'a str> {
     let mut m = HashMap::with_capacity(50);
     for expr in body.expressions.list.iter().enumerate() {
         if let Expression::Expression {
@@ -51,7 +59,7 @@ pub fn get_exprs<'a>(body: &'a GraphState) -> HashMap<u32, &'a str> {
             other: _,
         } = expr.1
         {
-            m.insert(*id, s.as_str());
+            m.insert(ExpressionId(*id), s.as_str());
         }
     }
     m

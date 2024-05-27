@@ -1,19 +1,23 @@
-use std::{num::NonZeroU32, sync::Arc};
+use std::{collections::HashMap, num::NonZeroU32, sync::Arc};
 
 use anyhow::{bail, Context, Result};
 use arc_swap::ArcSwap;
 use debug_tree::TreeBuilder;
 
+use shrinkwraprs::Shrinkwrap;
 use strum::{AsRefStr, Display};
 
-use super::super::ast::{BinaryOp, Comparison, CoordinateAccess, UnaryOp};
+use super::{
+    super::ast::{BinaryOp, Comparison, CoordinateAccess, UnaryOp},
+    expression_provider::ExpressionId,
+};
 use crate::{graph::expressions::FnId, util::Discard};
 
 /// Contains a standalone executable IR sequence along with metadata about its arguments and their types
 #[derive(Debug, Clone)]
 pub struct IRSegment {
     pub args: Vec<IRType>,
-    pub dependencies: Vec,
+    pub dependencies: HashMap<FunctionId, Arc<Self>>,
     pub instructions: IRInstructionSeq,
     pub ret: Option<Id>,
 }
@@ -21,9 +25,23 @@ impl IRSegment {
     pub fn new(args: Vec<IRType>) -> Self {
         Self {
             args,
+            dependencies: HashMap::new(),
             instructions: IRInstructionSeq::new(),
             ret: None,
         }
+    }
+    pub fn push_dependency(&mut self, dep: Arc<Self>, expr: ExpressionId) -> FunctionId {
+        // we have bigger problems if a function has > u32::MAX deps
+        let id = FunctionId(Id::new(*expr, dep.ret.unwrap().t()));
+        match self.dependencies.entry(id) {
+            std::collections::hash_map::Entry::Occupied(o) => {
+                return *o.key();
+            }
+            std::collections::hash_map::Entry::Vacant(v) => {
+                v.insert(dep);
+            }
+        };
+        id
     }
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -71,7 +89,7 @@ impl IRType {
 }
 
 /// Identifies a numeric argument to the relevant IRChunk by index in the argument list
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Hash)]
 pub struct Id {
     inner: NonZeroU32,
 }
@@ -168,6 +186,8 @@ pub enum EndIndex {
     Val(Id),
     Full,
 }
+#[derive(Debug, Clone, Copy, Shrinkwrap, PartialEq, Eq, Hash)]
+pub struct FunctionId(pub(super) Id);
 // typed indentifier that identifies an item of type and index in args
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ArgId {
@@ -247,7 +267,7 @@ pub enum IROp {
         default: Id,
     },
     /// Call a function
-    FnCall(FnId),
+    FnCall(FunctionId),
     /// Define an argument to be passed into a function call
     FnArg(Id),
     /// Return the value stored in this register
@@ -264,11 +284,11 @@ impl IROp {
             | IROp::IConst(..)
             | IROp::CoordinateOf(..) => IRType::Number,
             //Passthrough types
-            IROp::LoadBroadcastArg(BroadcastArg { t, .. })
-            | IROp::FnCall(FnId { t, .. })
-            | IROp::LoadArg(ArgId { t, .. }) => *t,
+            IROp::LoadBroadcastArg(BroadcastArg { t, .. }) | IROp::LoadArg(ArgId { t, .. }) => *t,
 
-            IROp::BeginPiecewise { res: id, .. } | IROp::Ret(id) => id.t(),
+            IROp::FnCall(FunctionId(id)) | IROp::BeginPiecewise { res: id, .. } | IROp::Ret(id) => {
+                id.t()
+            }
             //Opaque types
             IROp::Vec2(..) => IRType::Vec2,
             IROp::Vec3(..) => IRType::Vec3,
@@ -518,7 +538,7 @@ impl IRInstructionSeq {
                 b
             }
             IROp::FnCall(f) => {
-                let b = builder.add_branch(&format!("Function call (id {})", f.idx));
+                let b = builder.add_branch(&format!("Function call (id {})", f.idx()));
                 let mut it = self.backing[node.idx() as usize..].iter();
                 it.next().discard();
                 loop {

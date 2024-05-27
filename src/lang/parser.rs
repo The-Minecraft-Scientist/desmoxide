@@ -85,7 +85,7 @@ impl<'a> Parser<'a> {
         assert_token_matches!(self.lexer, Token::LParen);
         self.parse_fn_call(ThinVec::with_capacity(5))
     }
-    //Sepcial case for when suffix call has already introduced an initial argument
+    //Special case for when suffix call has already introduced an initial argument
     fn parse_fn_call(&mut self, vars: ThinVec<ASTNodeId>) -> Result<ThinVec<ASTNodeId>> {
         self.parse_values(vars, Token::RParen)
     }

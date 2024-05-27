@@ -1,15 +1,16 @@
-use std::{collections::HashMap, fmt::Debug};
+use std::{collections::HashMap, fmt::Debug, sync::Arc};
 
 use super::{
     super::ast::{
         ASTNode, ASTNodeId, BinaryOp, CoordinateAccess, Ident, List, ListOp, UnaryOp, Value, AST,
     },
-    expression_provider::ExpressionProvider,
+    expression_provider::{ExpressionId, ExpressionProvider},
     ir::{
-        ArgId, BinaryListOp, BroadcastArg, EndIndex, IRInstructionSeq, IROp, IRSegment, IRType, Id,
+        ArgId, BinaryListOp, BroadcastArg, EndIndex, FunctionId, IRInstructionSeq, IROp, IRSegment,
+        IRType, Id,
     },
 };
-use crate::{compiler_error, permute};
+use crate::{compiler_error, graph::expressions::ExpressionType, permute};
 use anyhow::{bail, Context, Result};
 
 use thin_vec::ThinVec;
@@ -17,9 +18,16 @@ use thin_vec::ThinVec;
 #[derive(Debug)]
 pub struct Frontend<'borrow, 'source> {
     pub ctx: &'borrow dyn ExpressionProvider<'source>,
+    pub fn_cache: HashMap<(u32, Vec<IRType>), Arc<IRSegment>>,
 }
 
 impl<'borrow, 'source> Frontend<'borrow, 'source> {
+    pub fn new(ctx: &'borrow dyn ExpressionProvider<'source>) -> Self {
+        Self {
+            ctx,
+            fn_cache: HashMap::with_capacity(10),
+        }
+    }
     pub fn compile_expr(&mut self, expr: &'borrow AST<'source>) -> Result<IRSegment> {
         let mut frame = Frame::empty();
         let mut segment = IRSegment::new(vec![IRType::Number, IRType::Number]);
@@ -47,7 +55,7 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
     }
     fn compile_fn(
         &mut self,
-        arg_types: &Vec<IRType>,
+        arg_types: Vec<IRType>,
         args: &ThinVec<Ident<'source>>,
         expr: &'borrow AST<'source>,
     ) -> Result<IRSegment> {
@@ -73,18 +81,33 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
         segment.ret = Some(ret_id);
         Ok(segment)
     }
-    pub fn compile_and_cache_fn(&mut self, idx: u32, args: Vec<IRType>) -> Result<FnId> {
-        let (argnames, ast) = self.ctx.fn_ident_ast(idx)?;
-        let segment = self.compile_fn(&args, &argnames, ast)?;
-        let t = segment.ret.unwrap().t();
-        self.ctx.cache_compiled_fn(idx, t, segment)?;
-        Ok(FnId { idx, t })
+    pub fn invalidate_cache(&mut self) {
+        self.fn_cache.clear();
+    }
+    pub fn compile_and_cache_fn(
+        &mut self,
+        id: ExpressionId,
+        arg_types: Vec<IRType>,
+    ) -> Result<Arc<IRSegment>> {
+        let k = (*id, arg_types);
+        if let Some(compiled) = self.fn_cache.get(&k) {
+            return Ok(Arc::clone(compiled));
+        }
+        let (args, expr) = self
+            .ctx
+            .fn_ast(id)
+            .context("getting function expression AST")?;
+        let a = Arc::new(self.compile_fn(k.1.clone(), args, expr)?);
+        self.fn_cache.insert((*id, k.1), Arc::clone(&a));
+        Ok(a)
     }
     pub fn direct_compile_fn(&mut self, i: &str) -> Result<IRSegment> {
-        let id = self.ctx.fn_ident_id(i)?;
-        let (args, ast) = self.ctx.fn_ident_ast(id)?;
+        let (args, ast) = self
+            .ctx
+            .fn_ast_by_name(i)
+            .context("getting AST from expression provider")?;
         let v = vec![IRType::Number; args.len()];
-        self.compile_fn(&v, args, ast)
+        self.compile_fn(v, args, ast)
     }
     fn rec_build_ir(
         &mut self,
@@ -101,7 +124,10 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
                     if let Some(t) = frame.map_ident(s.as_str()) {
                         t
                     } else {
-                        let a = self.ctx.ident_ast(&s)?;
+                        let a = self
+                            .ctx
+                            .ident_ast_by_name(&s)
+                            .context("getting ident AST")?;
                         let out = self.rec_build_ir(segment, a.root.unwrap(), a, frame)?;
                         frame.insert_top(s.as_str(), out);
                         out
@@ -192,20 +218,48 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
                         .instructions
                         .place(IROp::Binary(id, rhs, BinaryOp::Mul)));
                 }
-                //wackscope
-                if let Ok(a) = self.ctx.ident_ast(ident.as_str()) {
-                    let lhs = self.rec_build_ir(segment, a.root.unwrap(), a, frame)?;
-                    return Ok(segment
-                        .instructions
-                        .place(IROp::Binary(lhs, rhs, BinaryOp::Mul)));
-                }
-                //function call
-                if let Ok(idx) = self.ctx.fn_ident_id(ident.as_str()) {
-                    let t = self.compile_and_cache_fn(idx, vec![rhs.t()])?;
-                    let id = segment.instructions.place(IROp::FnCall(t));
-                    segment.instructions.push(IROp::FnArg(rhs));
-                    return Ok(id);
-                }
+
+                if let Ok(t) = self.ctx.expression_type_by_name(ident) {
+                    match t {
+                        //wackscope
+                        ExpressionType::Var(i) => {
+                            let ast = self
+                                .ctx
+                                .ident_ast_by_name(i.as_str())
+                                .context("AST not present for existent ident expression")?;
+                            let lhs = self.rec_build_ir(
+                                segment,
+                                ast.root.context("AST was not complete")?,
+                                ast,
+                                frame,
+                            )?;
+                            return Ok(segment.instructions.place(IROp::Binary(
+                                lhs,
+                                rhs,
+                                BinaryOp::Mul,
+                            )));
+                        }
+                        //function
+                        ExpressionType::Fn { .. } => {
+                            let id = self
+                                .ctx
+                                .get_ident_id(ident)
+                                .context("AST not present for existent function")?;
+                            let f = self.compile_and_cache_fn(id, vec![rhs.t()])?;
+                            let dep = segment.push_dependency(f, id);
+                            let id = segment.instructions.place(IROp::FnCall(dep));
+                            let _ = segment.instructions.place(IROp::FnArg(rhs));
+                        }
+                        e => {
+                            compiler_error!(
+                                node,
+                                "Got incorrect expression type {:?}, expected Var or Fn",
+                                e
+                            );
+                        }
+                    }
+                    todo!()
+                };
                 compiler_error!(
                     node,
                     "\"{}\" does not reference any value or function",
@@ -217,11 +271,23 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
                 for arg in a {
                     args.push(self.rec_build_ir(segment, *arg, expr, frame)?);
                 }
-                let fn_id = self.compile_and_cache_fn(
-                    self.ctx.fn_ident_id(f.as_str())?,
+                let expr_id = self
+                    .ctx
+                    .get_ident_id(f)
+                    .context("could not get expression id")?;
+                let Ok(ExpressionType::Fn { .. }) = self.ctx.expression_type(expr_id) else {
+                    compiler_error!(
+                        node,
+                        "identifier \"{}\" exists but is not a function!",
+                        f.as_str()
+                    )
+                };
+                let func = self.compile_and_cache_fn(
+                    expr_id,
                     args.iter().map(|id| id.t()).collect::<Vec<_>>(),
                 )?;
-                let id = segment.instructions.place(IROp::FnCall(fn_id));
+                let id = segment.push_dependency(func, expr_id);
+                let id = segment.instructions.place(IROp::FnCall(id));
                 let _ = segment
                     .instructions
                     .place_block(&args.iter().map(|a| IROp::FnArg(*a)).collect::<Vec<_>>());

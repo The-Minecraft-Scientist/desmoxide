@@ -1,13 +1,17 @@
 use std::collections::{hash_map::Entry, HashMap};
 
 use logos::Logos;
+use shrinkwraprs::Shrinkwrap;
 use thin_vec::ThinVec;
 
 use anyhow::{bail, Context, Error, Result};
 
 use crate::lang::{
     ast::{Comparison, Ident, AST},
-    compiler::{frontend::IRSegment, ir::IRType},
+    compiler::{
+        expression_provider::{ExpressionId, ExpressionProvider},
+        ir::{IRSegment, IRType},
+    },
     lexer::Token,
     parser::Parser,
 };
@@ -20,68 +24,27 @@ pub struct FnId {
     pub idx: u32,
     pub t: IRType,
 }
-
 #[derive(Debug)]
 pub struct Expressions<'a> {
-    pub storage: &'a HashMap<u32, &'a str>,
-    pub meta: HashMap<u32, ExpressionMeta<'a>>,
-    pub ident_lookup: HashMap<&'a str, u32>,
-    pub fn_lookup: HashMap<&'a str, u32>,
+    pub storage: &'a HashMap<ExpressionId, &'a str>,
+    pub meta: HashMap<ExpressionId, ExpressionMeta<'a>>,
+    pub ident_lookup: HashMap<&'a str, ExpressionId>,
 }
 impl<'a> Expressions<'a> {
-    pub fn new(lines: &'a HashMap<u32, &'a str>) -> Self {
+    pub fn new(lines: &'a HashMap<ExpressionId, &'a str>) -> Self {
         Self {
             meta: HashMap::with_capacity(lines.len()),
             storage: lines,
             ident_lookup: HashMap::with_capacity(lines.len() / 2),
-            fn_lookup: HashMap::with_capacity(lines.len() / 2),
         }
     }
-    pub fn line_lexer(&self, line: u32) -> Result<MultiPeek<LexIter<'a, Token>>> {
+    pub fn line_lexer(&self, line: ExpressionId) -> Result<MultiPeek<LexIter<'a, Token>>> {
         Ok(MultiPeek::new(LexIter::new(Token::lexer(
             *self
                 .storage
                 .get(&line)
-                .context(format!("line with ID {} not found!", line))?,
+                .context(format!("line with ID {} not found!", *line))?,
         ))))
-    }
-    pub fn ident_ast(&self, i: &str) -> Result<&AST<'a>> {
-        let idx = self.ident_id(i)?;
-        Ok(self
-            .meta
-            .get(&idx)
-            .context("could not get expression")?
-            .latest_rhs_ast
-            .as_ref()
-            .context("Ident does not have valid LHS AST")?)
-    }
-    pub fn fn_ident_ast(&self, idx: u32) -> Result<(&ThinVec<Ident<'a>>, &AST<'a>)> {
-        let meta = self.meta.get(&idx).context("could not get expression")?;
-        if let ExpressionType::Fn { ref params, .. } = meta
-            .expression_type
-            .as_ref()
-            .context("Expression was not processed")?
-        {
-            return Ok((
-                params,
-                meta.latest_rhs_ast
-                    .as_ref()
-                    .context("tried to get expression AST but it was't parsed yet")?,
-            ));
-        }
-        bail!("Tried to get function AST of a non-function Ident")
-    }
-    pub fn fn_ident_id(&self, i: &str) -> Result<u32> {
-        Ok(*self
-            .fn_lookup
-            .get(i)
-            .context(format!("could not find Function {}", i))?)
-    }
-    pub fn ident_id(&self, i: &str) -> Result<u32> {
-        Ok(*self
-            .ident_lookup
-            .get(i)
-            .context(format!("could not find Ident {}", i))?)
     }
     pub(crate) fn cache_compiled_fn(&self, idx: u32, t: IRType, ir: IRSegment) -> Result<()> {
         self.meta
@@ -93,7 +56,10 @@ impl<'a> Expressions<'a> {
             .insert(t, ir);
         Ok(())
     }
-    pub fn scan_expression_type(&mut self, idx: u32) -> Result<MultiPeek<LexIter<'a, Token>>> {
+    pub fn scan_expression_type(
+        &mut self,
+        idx: ExpressionId,
+    ) -> Result<MultiPeek<LexIter<'a, Token>>> {
         let mut lexer = self.line_lexer(idx)?;
         let first = *lexer.multipeek_res()?;
         let t = match first.1 {
@@ -110,7 +76,7 @@ impl<'a> Expressions<'a> {
                                     break None;
                                 }
                                 lexer.catch_up();
-                                self.fn_lookup.insert(first.0, idx);
+                                self.ident_lookup.insert(first.0, idx.into());
                                 break Some(ExpressionType::Fn {
                                     name: first.0.into(),
                                     params: argv,
@@ -170,7 +136,7 @@ impl<'a> Expressions<'a> {
         }
         Ok(())
     }
-    pub fn parse_expr(&mut self, idx: u32) -> Result<()> {
+    pub fn parse_expr(&mut self, idx: ExpressionId) -> Result<()> {
         let mut lex = self.scan_expression_type(idx)?;
         let mut rhs = None;
         if let Some(_) = lex.peek_next() {
@@ -257,4 +223,64 @@ pub enum EquationType {
     Implicit,
     Explicit,
     InEq(Comparison),
+}
+
+impl<'a> ExpressionProvider<'a> for Expressions<'a> {
+    fn get_ident_id(
+        &self,
+        ident: &str,
+    ) -> Result<crate::lang::compiler::expression_provider::ExpressionId> {
+        self.ident_lookup
+            .get(ident)
+            .map(|a| *a)
+            .context("ident not found by get_ident_id")
+    }
+
+    fn expression_type(
+        &self,
+        id: crate::lang::compiler::expression_provider::ExpressionId,
+    ) -> Result<&ExpressionType<'a>> {
+        Ok(self
+            .meta
+            .get(&id)
+            .map(|a| {
+                a.expression_type
+                    .as_ref()
+                    .context("expression had no expression type")
+            })
+            .context("expression did not exist!")??)
+    }
+
+    fn fn_ast(
+        &self,
+        id: crate::lang::compiler::expression_provider::ExpressionId,
+    ) -> Result<(&ThinVec<Ident<'a>>, &AST<'a>)> {
+        let meta = self.meta.get(&id).context("could not get expression")?;
+        if let ExpressionType::Fn { ref params, .. } = meta
+            .expression_type
+            .as_ref()
+            .context("Expression was not processed")?
+        {
+            return Ok((
+                params,
+                meta.latest_rhs_ast
+                    .as_ref()
+                    .context("tried to get expression AST but it was't parsed yet")?,
+            ));
+        }
+        bail!("Tried to get function AST of a non-function Ident")
+    }
+
+    fn ident_ast(
+        &self,
+        id: crate::lang::compiler::expression_provider::ExpressionId,
+    ) -> Result<&AST<'a>> {
+        Ok(self
+            .meta
+            .get(&id)
+            .context("could not get expression")?
+            .latest_rhs_ast
+            .as_ref()
+            .context("Ident does not have valid LHS AST")?)
+    }
 }
