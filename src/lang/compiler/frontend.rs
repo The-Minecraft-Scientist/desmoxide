@@ -4,12 +4,12 @@ use super::{
     super::ast::{
         ASTNode, ASTNodeId, BinaryOp, CoordinateAccess, Ident, List, ListOp, UnaryOp, Value, AST,
     },
-    expression_provider::{ExpressionId, ExpressionProvider},
     ir::{
         ArgId, BinaryListOp, BroadcastArg, EndIndex, FunctionId, IRInstructionSeq, IROp, IRSegment,
         IRType, Id,
     },
 };
+use crate::lang::expression_provider::{ExpressionId, ExpressionProvider};
 use crate::{compiler_error, graph::expressions::ExpressionType, permute};
 use anyhow::{bail, Context, Result};
 

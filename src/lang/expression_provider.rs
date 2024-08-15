@@ -8,7 +8,7 @@ use anyhow::Result;
 use shrinkwraprs::Shrinkwrap;
 use thin_vec::ThinVec;
 
-use super::ir::Id;
+use super::compiler::ir::Id;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Shrinkwrap)]
 pub struct ExpressionId(pub u32);
 pub trait ExpressionProvider<'a>: Debug {

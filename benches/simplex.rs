@@ -4,7 +4,7 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use desmoxide::{
     graph::expressions::Expressions,
     interop::{Expression, GraphState},
-    lang::compiler::{expression_provider::ExpressionId, frontend::Frontend},
+    lang::{compiler::frontend::Frontend, expression_provider::ExpressionId},
 };
 
 fn benchmark_compile(c: &mut Criterion) {

@@ -6,10 +6,8 @@ use debug_tree::TreeBuilder;
 use shrinkwraprs::Shrinkwrap;
 use strum::{AsRefStr, Display};
 
-use super::{
-    super::ast::{BinaryOp, Comparison, CoordinateAccess, UnaryOp},
-    expression_provider::ExpressionId,
-};
+use super::super::ast::{BinaryOp, Comparison, CoordinateAccess, UnaryOp};
+use crate::lang::expression_provider::ExpressionId;
 use crate::{graph::expressions::FnId, util::Discard};
 
 /// Contains a standalone executable IR sequence along with metadata about its arguments and their types
