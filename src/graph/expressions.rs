@@ -8,10 +8,8 @@ use anyhow::{bail, Context, Error, Result};
 
 use crate::lang::{
     ast::{Comparison, Ident, AST},
-    compiler::{
-        expression_provider::{ExpressionId, ExpressionProvider},
-        ir::{IRSegment, IRType},
-    },
+    compiler::ir::{IRSegment, IRType},
+    expression_provider::{ExpressionId, ExpressionProvider},
     lexer::Token,
     parser::Parser,
 };
@@ -226,10 +224,7 @@ pub enum EquationType {
 }
 
 impl<'a> ExpressionProvider<'a> for Expressions<'a> {
-    fn get_ident_id(
-        &self,
-        ident: &str,
-    ) -> Result<crate::lang::compiler::expression_provider::ExpressionId> {
+    fn get_ident_id(&self, ident: &str) -> Result<crate::lang::expression_provider::ExpressionId> {
         self.ident_lookup
             .get(ident)
             .map(|a| *a)
@@ -238,7 +233,7 @@ impl<'a> ExpressionProvider<'a> for Expressions<'a> {
 
     fn expression_type(
         &self,
-        id: crate::lang::compiler::expression_provider::ExpressionId,
+        id: crate::lang::expression_provider::ExpressionId,
     ) -> Result<&ExpressionType<'a>> {
         Ok(self
             .meta
@@ -253,7 +248,7 @@ impl<'a> ExpressionProvider<'a> for Expressions<'a> {
 
     fn fn_ast(
         &self,
-        id: crate::lang::compiler::expression_provider::ExpressionId,
+        id: crate::lang::expression_provider::ExpressionId,
     ) -> Result<(&ThinVec<Ident<'a>>, &AST<'a>)> {
         let meta = self.meta.get(&id).context("could not get expression")?;
         if let ExpressionType::Fn { ref params, .. } = meta
@@ -271,10 +266,7 @@ impl<'a> ExpressionProvider<'a> for Expressions<'a> {
         bail!("Tried to get function AST of a non-function Ident")
     }
 
-    fn ident_ast(
-        &self,
-        id: crate::lang::compiler::expression_provider::ExpressionId,
-    ) -> Result<&AST<'a>> {
+    fn ident_ast(&self, id: crate::lang::expression_provider::ExpressionId) -> Result<&AST<'a>> {
         Ok(self
             .meta
             .get(&id)

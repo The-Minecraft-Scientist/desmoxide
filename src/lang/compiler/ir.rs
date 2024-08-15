@@ -7,10 +7,8 @@ use debug_tree::TreeBuilder;
 use shrinkwraprs::Shrinkwrap;
 use strum::{AsRefStr, Display};
 
-use super::{
-    super::ast::{BinaryOp, Comparison, CoordinateAccess, UnaryOp},
-    expression_provider::ExpressionId,
-};
+use super::super::ast::{BinaryOp, Comparison, CoordinateAccess, UnaryOp};
+use crate::lang::expression_provider::ExpressionId;
 use crate::{graph::expressions::FnId, util::Discard};
 
 /// Contains a standalone executable IR sequence along with metadata about its arguments and their types
@@ -258,12 +256,12 @@ pub enum IROp {
     Vec2(Id, Id),
     /// 3d vector.
     Vec3(Id, Id, Id),
+    Random(RandomOp),
     /// Begins a broadcast loop that executes its body over indices 0->end_index inclusive, and stores its output in b
     BeginBroadcast {
         inner_type: IRType,
         end_index: EndIndex,
     },
-    Random(RandomOp),
     /// Only allowed directly following SetBroadcast or BeginBroadcast instructions. Sets the broadcast argument slot at b to the item a
     SetBroadcastArg(Id, BroadcastArg),
     LoadBroadcastArg(BroadcastArg),
