@@ -140,11 +140,11 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
                 match (arg0.t().downcast_list(), arg1.t().downcast_list()) {
                     // List [op] Value
                     (Some(t), None) => {
-                        self.build_broadcast_binary(segment, node, arg0, t, arg1, op)?
+                        self.build_single_to_list_broadcast(segment, node, arg0, t, arg1, op)?
                     }
                     // Value [op] List
                     (None, Some(t)) => {
-                        self.build_broadcast_binary(segment, node, arg1, t, arg0, op)?
+                        self.build_single_to_list_broadcast(segment, node, arg1, t, arg0, op)?
                     }
                     // List [op] List
                     (Some(t0), Some(t1)) => {
@@ -638,7 +638,7 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
             (t, op) => compiler_error!(node, "cannot perform function {:?} on a {:?}", op, t),
         })
     }
-    fn build_broadcast_binary(
+    fn build_single_to_list_broadcast(
         &mut self,
         segment: &mut IRSegment,
         node: ASTNodeId,
