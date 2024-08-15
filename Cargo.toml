@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.75"
+thiserror = "1.0"
 debug_tree = "0.4.0"
 logos = "0.14.0"
 serde = { version = "1.0.193", features = ["derive"] }

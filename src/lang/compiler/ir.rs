@@ -1,3 +1,4 @@
+use core::slice;
 use std::{collections::HashMap, num::NonZeroU32, sync::Arc};
 
 use anyhow::{bail, Context, Result};
@@ -43,6 +44,30 @@ impl IRSegment {
         id
     }
 }
+
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[repr(u8)]
+pub enum IRValue {
+    Number(f64),
+    Vec2(f64, f64),
+    Vec3(f64, f64, f64),
+    NumberList(Vec<f64>),
+    Vec2List(Vec<(f64, f64)>),
+    Vec3List(Vec<(f64, f64, f64)>),
+}
+impl IRValue {
+    pub fn ir_type(&self) -> IRType {
+        match self {
+            Self::Number(_) => IRType::Number,
+            Self::Vec2(_, _) => IRType::Vec2,
+            Self::Vec3(_, _, _) => IRType::Vec3,
+            Self::NumberList(_) => IRType::NumberList,
+            Self::Vec2List(_) => IRType::Vec2List,
+            Self::Vec3List(_) => IRType::Vec3List,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u8)]
 pub enum IRType {
@@ -327,11 +352,16 @@ impl IROp {
 pub struct IRInstructionSeq {
     backing: Vec<IROp>,
 }
+
 impl IRInstructionSeq {
     pub fn new() -> Self {
         Self {
             backing: Vec::new(),
         }
+    }
+
+    pub fn iter(&self) -> slice::Iter<IROp> {
+        self.backing.iter()
     }
     pub fn len(&self) -> usize {
         self.backing.len()
