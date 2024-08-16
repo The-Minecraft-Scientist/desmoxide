@@ -2,7 +2,10 @@ use std::ops::Index;
 
 use thiserror::Error;
 
-use crate::lang::compiler::ir::{IROp, IRSegment, IRType, IRValue, Id};
+use crate::lang::{
+    ast::BinaryOp,
+    compiler::ir::{IROp, IRSegment, IRType, IRValue, Id},
+};
 
 struct ValStorage {
     vals: Vec<Option<IRValue>>,
@@ -45,6 +48,8 @@ pub fn typecheck(value: &IRValue, expected: IRType) -> Result<&IRValue, EvalErro
 pub enum EvalError {
     #[error("Instruction {0} wasnt yet executed")]
     InstructionNotExecuted(u32),
+    #[error("Bytecode doesnt not contain return instruction")]
+    NoReturn,
     #[error("Missing value at instruction: {0}")]
     MissingVal(u32),
     #[error("TypeError, expected {0:?}, found {1:?}")]
@@ -85,10 +90,20 @@ pub fn eval(bytecode: &IRSegment, args: Vec<IRValue>) -> Result<IRValue, EvalErr
                 }
             }
             &IROp::Ret(id) => return vals.get(id).cloned(),
+            &IROp::Binary(arg1, arg2, op) => Some(match op {
+                BinaryOp::Add => match (vals.get(arg1)?, vals.get(arg2)?) {
+                    (IRValue::Number(n1), IRValue::Number(n2)) => IRValue::Number(n1 + n2),
+                    (IRValue::Vec2(n1x, n1y), IRValue::Vec2(n2x, n2y)) => {
+                        IRValue::Vec2(n1x + n2x, n1y + n2y)
+                    }
+                    _ => todo!(),
+                },
+                _ => todo!(),
+            }),
             _ => todo!(),
         };
         vals.push(val)
     }
 
-    todo!()
+    Err(EvalError::NoReturn)
 }
