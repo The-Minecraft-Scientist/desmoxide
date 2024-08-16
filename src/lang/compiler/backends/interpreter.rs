@@ -135,6 +135,48 @@ pub fn eval(bytecode: &IRSegment, args: Vec<IRValue>) -> Result<IRValue, EvalErr
                         }))
                     }
                 },
+                BinaryOp::Sub => match (vals.get(arg1)?, vals.get(arg2)?) {
+                    (IRValue::Number(n1), IRValue::Number(n2)) => IRValue::Number(n1 - n2),
+                    (IRValue::Vec2(x1, y1), IRValue::Vec2(x2, y2)) => {
+                        IRValue::Vec2(x1 - x2, y1 - y2)
+                    }
+                    (IRValue::Vec3(x1, y1, z1), IRValue::Vec3(x2, y2, z2)) => {
+                        IRValue::Vec3(x1 - x2, y1 - y2, z1 - z2)
+                    }
+                    (v1, _) => {
+                        return Err(EvalError::TypeError(TypeError {
+                            expected: vec![IRType::Number, IRType::Vec2, IRType::Vec3],
+                            found: v1.ir_type(),
+                        }))
+                    }
+                    (_, v2) => {
+                        return Err(EvalError::TypeError(TypeError {
+                            expected: vec![IRType::Number, IRType::Vec2, IRType::Vec3],
+                            found: v2.ir_type(),
+                        }))
+                    }
+                },
+                BinaryOp::Mul => match (vals.get(arg1)?, vals.get(arg2)?) {
+                    (IRValue::Number(n1), IRValue::Number(n2)) => IRValue::Number(n1 + n2),
+                    (IRValue::Vec2(x1, y1), IRValue::Vec2(x2, y2)) => {
+                        IRValue::Number(x1 * x2 + y1 * y2)
+                    }
+                    (IRValue::Vec3(x1, y1, z1), IRValue::Vec3(x2, y2, z2)) => {
+                        IRValue::Number(x1 * x2 + y1 * y2 + z1 * z2)
+                    }
+                    (v1, _) => {
+                        return Err(EvalError::TypeError(TypeError {
+                            expected: vec![IRType::Number, IRType::Vec2, IRType::Vec3],
+                            found: v1.ir_type(),
+                        }))
+                    }
+                    (_, v2) => {
+                        return Err(EvalError::TypeError(TypeError {
+                            expected: vec![IRType::Number, IRType::Vec2, IRType::Vec3],
+                            found: v2.ir_type(),
+                        }))
+                    }
+                },
                 _ => todo!(),
             },
             _ => todo!(),
