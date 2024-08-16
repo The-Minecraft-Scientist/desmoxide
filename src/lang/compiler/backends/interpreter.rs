@@ -1,4 +1,5 @@
-use std::ops::Index;
+use core::fmt;
+use std::{error::Error, ops::Index};
 
 use thiserror::Error;
 
@@ -8,7 +9,7 @@ use crate::lang::{
 };
 
 struct ValStorage {
-    vals: Vec<Option<IRValue>>,
+    vals: Vec<IRValue>,
 }
 
 impl ValStorage {
@@ -18,16 +19,14 @@ impl ValStorage {
         }
     }
 
-    pub fn push(&mut self, val: Option<IRValue>) {
+    pub fn push(&mut self, val: IRValue) {
         self.vals.push(val)
     }
 
     pub fn get(&self, id: Id) -> Result<&IRValue, EvalError> {
         self.vals
             .get(id.idx() as usize)
-            .ok_or_else(|| EvalError::InstructionNotExecuted(id.idx()))?
-            .as_ref()
-            .ok_or_else(|| EvalError::MissingVal(id.idx()))
+            .ok_or_else(|| EvalError::InstructionNotExecuted(id.idx()))
     }
 
     pub fn get_typechecked(&self, id: Id, expected: IRType) -> Result<&IRValue, EvalError> {
@@ -40,7 +39,31 @@ impl ValStorage {
 pub fn typecheck(value: &IRValue, expected: IRType) -> Result<&IRValue, EvalError> {
     match (value.ir_type(), value) {
         (expected, v) => Ok(v),
-        (t, _) => Err(EvalError::TypeError(expected, t)),
+        (t, _) => Err(EvalError::TypeError(TypeError {
+            expected: vec![expected],
+            found: t,
+        })),
+    }
+}
+
+#[derive(Debug)]
+pub struct TypeError {
+    expected: Vec<IRType>,
+    found: IRType,
+}
+
+impl Error for TypeError {}
+
+impl fmt::Display for TypeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "TypeError, expected ")?;
+        for (i, ty) in self.expected.iter().enumerate() {
+            if i > 0 {
+                write!(f, " or ")?; // Add a comma between types
+            }
+            write!(f, "{:?}", ty)?;
+        }
+        write!(f, " found {:?}", self.found)
     }
 }
 
@@ -52,18 +75,18 @@ pub enum EvalError {
     NoReturn,
     #[error("Missing value at instruction: {0}")]
     MissingVal(u32),
-    #[error("TypeError, expected {0:?}, found {1:?}")]
-    TypeError(IRType, IRType),
+    #[error(transparent)]
+    TypeError(TypeError),
 }
 
 pub fn eval(bytecode: &IRSegment, args: Vec<IRValue>) -> Result<IRValue, EvalError> {
     let mut vals = ValStorage::new();
     for op in bytecode.instructions.iter() {
         let val = match op {
-            &IROp::Nop => None,
-            &IROp::LoadArg(id) => Some(args[id.idx as usize].clone()),
-            &IROp::Const(num) => Some(IRValue::Number(num)),
-            &IROp::IConst(num) => Some(IRValue::Number(num as f64)),
+            &IROp::Nop => IRValue::None,
+            &IROp::LoadArg(id) => args[id.idx as usize].clone(),
+            &IROp::Const(num) => IRValue::Number(num),
+            &IROp::IConst(num) => IRValue::Number(num as f64),
             &IROp::Vec2(arg1, arg2) => {
                 let expected = IRType::Number;
                 if let (IRValue::Number(n1), IRValue::Number(n2)) = (
@@ -71,7 +94,7 @@ pub fn eval(bytecode: &IRSegment, args: Vec<IRValue>) -> Result<IRValue, EvalErr
                     vals.get_typechecked(arg2, expected)?,
                 ) {
                     let val = IRValue::Vec2(*n1, *n2);
-                    Some(val)
+                    val
                 } else {
                     unreachable!("type check failed, this should not happen")
                 }
@@ -84,22 +107,36 @@ pub fn eval(bytecode: &IRSegment, args: Vec<IRValue>) -> Result<IRValue, EvalErr
                     vals.get_typechecked(arg3, expected)?,
                 ) {
                     let val = IRValue::Vec3(*n1, *n2, *n3);
-                    Some(val)
+                    val
                 } else {
                     unreachable!("type check failed, this should not happen")
                 }
             }
             &IROp::Ret(id) => return vals.get(id).cloned(),
-            &IROp::Binary(arg1, arg2, op) => Some(match op {
+            &IROp::Binary(arg1, arg2, op) => match op {
                 BinaryOp::Add => match (vals.get(arg1)?, vals.get(arg2)?) {
                     (IRValue::Number(n1), IRValue::Number(n2)) => IRValue::Number(n1 + n2),
-                    (IRValue::Vec2(n1x, n1y), IRValue::Vec2(n2x, n2y)) => {
-                        IRValue::Vec2(n1x + n2x, n1y + n2y)
+                    (IRValue::Vec2(x1, y1), IRValue::Vec2(x2, y2)) => {
+                        IRValue::Vec2(x1 + x2, y1 + y2)
                     }
-                    _ => todo!(),
+                    (IRValue::Vec3(x1, y1, z1), IRValue::Vec3(x2, y2, z2)) => {
+                        IRValue::Vec3(x1 + x2, y1 + y2, z1 + z2)
+                    }
+                    (v1, _) => {
+                        return Err(EvalError::TypeError(TypeError {
+                            expected: vec![IRType::Number, IRType::Vec2, IRType::Vec3],
+                            found: v1.ir_type(),
+                        }))
+                    }
+                    (_, v2) => {
+                        return Err(EvalError::TypeError(TypeError {
+                            expected: vec![IRType::Number, IRType::Vec2, IRType::Vec3],
+                            found: v2.ir_type(),
+                        }))
+                    }
                 },
                 _ => todo!(),
-            }),
+            },
             _ => todo!(),
         };
         vals.push(val)
