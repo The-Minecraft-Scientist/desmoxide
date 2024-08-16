@@ -18,18 +18,33 @@ impl ValStorage {
     pub fn push(&mut self, val: Option<IRValue>) {
         self.vals.push(val)
     }
+
+    pub fn get(&self, id: Id) -> Result<&IRValue, EvalError> {
+        self.vals
+            .get(id.idx() as usize)
+            .ok_or_else(|| EvalError::InstructionNotExecuted(id.idx()))?
+            .as_ref()
+            .ok_or_else(|| EvalError::MissingVal(id.idx()))
+    }
+
+    pub fn get_typechecked(&self, id: Id, expected: IRType) -> Result<&IRValue, EvalError> {
+        let value = self.get(id)?;
+
+        typecheck(value, expected)
+    }
 }
 
-impl Index<Id> for ValStorage {
-    type Output = Option<IRValue>;
-
-    fn index(&self, id: Id) -> &Self::Output {
-        &self.vals[id.idx() as usize]
+pub fn typecheck(value: &IRValue, expected: IRType) -> Result<&IRValue, EvalError> {
+    match (value.ir_type(), value) {
+        (expected, v) => Ok(v),
+        (t, _) => Err(EvalError::TypeError(expected, t)),
     }
 }
 
 #[derive(Debug, Error)]
 pub enum EvalError {
+    #[error("Instruction {0} wasnt yet executed")]
+    InstructionNotExecuted(u32),
     #[error("Missing value at instruction: {0}")]
     MissingVal(u32),
     #[error("TypeError, expected {0:?}, found {1:?}")]
@@ -43,46 +58,33 @@ pub fn eval(bytecode: &IRSegment, args: Vec<IRValue>) -> Result<IRValue, EvalErr
             &IROp::Nop => None,
             &IROp::LoadArg(id) => Some(args[id.idx as usize].clone()),
             &IROp::Const(num) => Some(IRValue::Number(num)),
-            &IROp::Vec2(arg1, arg2) => match (&vals[arg1], &vals[arg2]) {
-                (&Some(IRValue::Number(n1)), &Some(IRValue::Number(n2))) => {
-                    let val = IRValue::Vec2(n1, n2);
+            &IROp::IConst(num) => Some(IRValue::Number(num as f64)),
+            &IROp::Vec2(arg1, arg2) => {
+                let expected = IRType::Number;
+                if let (IRValue::Number(n1), IRValue::Number(n2)) = (
+                    vals.get_typechecked(arg1, expected)?,
+                    vals.get_typechecked(arg2, expected)?,
+                ) {
+                    let val = IRValue::Vec2(*n1, *n2);
                     Some(val)
+                } else {
+                    unreachable!("type check failed, this should not happen")
                 }
-                (Some(n1), _) => return Err(EvalError::TypeError(IRType::Number, n1.ir_type())),
-
-                (_, Some(n2)) => return Err(EvalError::TypeError(IRType::Number, n2.ir_type())),
-                (None, _) => {
-                    return Err(EvalError::MissingVal(arg1.idx()));
-                }
-                (_, None) => {
-                    return Err(EvalError::MissingVal(arg2.idx()));
-                }
-            },
-            &IROp::Vec3(arg1, arg2, arg3) => match (&vals[arg1], &vals[arg2], &vals[arg3]) {
-                (
-                    &Some(IRValue::Number(n1)),
-                    &Some(IRValue::Number(n2)),
-                    &Some(IRValue::Number(n3)),
-                ) => {
-                    let val = IRValue::Vec2(n1, n2);
+            }
+            &IROp::Vec3(arg1, arg2, arg3) => {
+                let expected = IRType::Number;
+                if let (IRValue::Number(n1), IRValue::Number(n2), IRValue::Number(n3)) = (
+                    vals.get_typechecked(arg1, expected)?,
+                    vals.get_typechecked(arg2, expected)?,
+                    vals.get_typechecked(arg3, expected)?,
+                ) {
+                    let val = IRValue::Vec3(*n1, *n2, *n3);
                     Some(val)
+                } else {
+                    unreachable!("type check failed, this should not happen")
                 }
-                (Some(n1), _, _) => return Err(EvalError::TypeError(IRType::Number, n1.ir_type())),
-
-                (_, Some(n2), _) => return Err(EvalError::TypeError(IRType::Number, n2.ir_type())),
-
-                (_, _, Some(n3)) => return Err(EvalError::TypeError(IRType::Number, n3.ir_type())),
-                (None, _, _) => {
-                    return Err(EvalError::MissingVal(arg1.idx()));
-                }
-                (_, None, _) => {
-                    return Err(EvalError::MissingVal(arg2.idx()));
-                }
-                (_, _, None) => {
-                    return Err(EvalError::MissingVal(arg3.idx()));
-                }
-            },
-
+            }
+            &IROp::Ret(id) => return vals.get(id).cloned(),
             _ => todo!(),
         };
         vals.push(val)
