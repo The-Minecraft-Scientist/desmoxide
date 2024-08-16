@@ -144,3 +144,54 @@ pub fn eval(bytecode: &IRSegment, args: Vec<IRValue>) -> Result<IRValue, EvalErr
 
     Err(EvalError::NoReturn)
 }
+
+#[cfg(test)]
+mod tests {
+
+    mod eval_tests {
+        use crate::lang::{
+            ast::BinaryOp,
+            compiler::ir::{IRInstructionSeq, IROp, IRSegment, IRType, IRValue, Id},
+        };
+
+        use super::super::eval;
+        use crate::lang::compiler::ir::ArgId;
+        use std::collections::HashMap;
+
+        macro_rules! parameterized_tests{
+
+            ($($name:ident: {ir: $ir:expr, args: $args:expr, expected: $expected:expr},)*) => {
+             $(
+                #[test]
+                fn $name() {
+                    let args :Vec<IRValue> = $args;
+                    let segment = IRSegment{
+                        args: args.iter().map(|arg| arg.ir_type()).collect(),
+                        dependencies: HashMap::new(),
+                        instructions: $ir.into(),
+                        ret: None
+                    };
+                    let results = eval(&segment, args).unwrap();
+                    assert_eq!(results, $expected);
+                }
+            )*
+            }
+        }
+
+        parameterized_tests! {
+            test_add: {ir: vec![IROp::Const(1.0),
+                          IROp::Binary(Id::new(0, IRType::Number), Id::new(0, IRType::Number), BinaryOp::Add),
+                          IROp::Ret(Id::new(1, IRType::Number))],
+                          args: vec![],
+                          expected: IRValue::Number(2.0)},
+
+            test_args: {ir: vec![IROp::Const(1.0),
+                          IROp::LoadArg(ArgId{
+                              idx: 0,
+                              t: IRType::Number
+                          }),
+                          IROp::Binary(Id::new(0, IRType::Number), Id::new(1, IRType::Number), BinaryOp::Add),
+                          IROp::Ret(Id::new(2, IRType::Number))], args: vec![IRValue::Number(1.0)], expected: IRValue::Number(2.0)},
+        }
+    }
+}

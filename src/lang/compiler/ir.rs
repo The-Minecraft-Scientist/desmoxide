@@ -353,6 +353,12 @@ pub struct IRInstructionSeq {
     backing: Vec<IROp>,
 }
 
+impl From<Vec<IROp>> for IRInstructionSeq {
+    fn from(value: Vec<IROp>) -> Self {
+        Self { backing: value }
+    }
+}
+
 impl IRInstructionSeq {
     pub fn new() -> Self {
         Self {

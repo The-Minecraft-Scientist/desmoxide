@@ -1,7 +1,7 @@
 use crate::{
     graph::expressions::Expressions,
     interop::{Expression, GraphState},
-    lang::compiler::{expression_provider::ExpressionId, frontend::Frontend},
+    lang::{compiler::frontend::Frontend, expression_provider::ExpressionId},
     util::thin_str::ThinStr,
 };
 use std::{collections::HashMap, time::Instant};
