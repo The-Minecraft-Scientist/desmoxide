@@ -35,8 +35,11 @@ macro_rules! impl_op {
                 match (self, rhs) {
                     (Number::Double(lhs), Number::Double(rhs)) => {
                         let result = lhs.$method(rhs);
-                        if result.is_nan() || result.is_infinite() {
+                        if result.is_nan() {
                             Number::Undefined
+                        }
+                        else if result.is_infinite() {
+                            Number::Fraction(Ratio::new(result.signum() as i64 * 1, 0))
                         } else {
                             Number::Double(result)
                         }
@@ -50,8 +53,11 @@ macro_rules! impl_op {
 
                     (Number::Fraction(lhs), Number::Double(rhs)) => {
                         let result = lhs.to_f64().unwrap() $op rhs;
-                        if result.is_nan() || result.is_infinite() {
+                        if result.is_nan() {
                             Number::Undefined
+                        }
+                        else if result.is_infinite() {
+                            Number::Fraction(Ratio::new(result.signum() as i64  * 1, 0))
                         } else {
                             Number::Double(result)
                         }
@@ -59,9 +65,12 @@ macro_rules! impl_op {
 
                     (Number::Double(lhs), Number::Fraction(rhs)) => {
                         let result = lhs $op rhs.to_f64().unwrap();
-                        if result.is_nan() || result.is_infinite() {
+                        if result.is_nan() {
                             Number::Undefined
-                        } else {
+                        }
+                        else if result.is_infinite() {
+                            Number::Fraction(Ratio::new(result.signum() as i64 * 1, 0))
+                        }else {
                             Number::Double(result)
                         }
                     }
