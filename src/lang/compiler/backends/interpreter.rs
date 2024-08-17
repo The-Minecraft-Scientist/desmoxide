@@ -1,14 +1,17 @@
 use core::fmt;
-use std::{error::Error, ops::Index};
+use std::{error::Error, f64::consts::PI, iter::Peekable, ops::Index};
 
-use num::{pow::Pow, rational::Ratio};
+use num::{pow::Pow, rational::Ratio, ToPrimitive};
 use thiserror::Error;
 
-use crate::lang::{
-    ast::{BinaryOp, Comparison},
-    compiler::{
-        ir::{IROp, IRSegment, IRType, Id},
-        value::{IRValue, Number},
+use crate::{
+    call_irrational,
+    lang::{
+        ast::{BinaryOp, Comparison, UnaryOp},
+        compiler::{
+            ir::{FunctionId, IROp, IRSegment, IRType, Id},
+            value::{IRValue, Number},
+        },
     },
 };
 
@@ -81,141 +84,196 @@ pub enum EvalError {
     MissingVal(u32),
     #[error(transparent)]
     TypeError(TypeError),
+    #[error("Missing function")]
+    MissingFunction(FunctionId),
 }
 
 pub fn eval(bytecode: &IRSegment, args: Vec<IRValue>) -> Result<IRValue, EvalError> {
     let mut vals = ValStorage::new();
-    for op in bytecode.instructions.iter() {
-        let val = match op {
-            &IROp::Nop => IRValue::None,
-            &IROp::LoadArg(id) => args[id.idx as usize].clone(),
-            &IROp::Const(num) => IRValue::Number(num.into()),
-            &IROp::IConst(num) => IRValue::Number(num.into()),
-            &IROp::Vec2(x, y) => {
-                let expected = IRType::Number;
-                if let (IRValue::Number(x), IRValue::Number(y)) = (
-                    vals.get_typechecked(x, expected)?,
-                    vals.get_typechecked(y, expected)?,
-                ) {
-                    let val = IRValue::Vec2(*x, *y);
-                    val
-                } else {
-                    unreachable!("Should have been typechecked before, should not happen")
-                }
-            }
-            &IROp::Vec3(x, y, z) => {
-                let expected = IRType::Number;
-                if let (IRValue::Number(x), IRValue::Number(y), IRValue::Number(z)) = (
-                    vals.get_typechecked(x, expected)?,
-                    vals.get_typechecked(y, expected)?,
-                    vals.get_typechecked(z, expected)?,
-                ) {
-                    let val = IRValue::Vec3(*x, *y, *z);
-                    val
-                } else {
-                    unreachable!("Should have been typechecked before, should not happen")
-                }
-            }
-            &IROp::Ret(id) => return vals.get(id).cloned(),
-            &IROp::Binary(lhs, rhs, op) => match op {
-                BinaryOp::Add => match (vals.get(lhs)?, vals.get(rhs)?) {
-                    (IRValue::Number(lhs), IRValue::Number(rhs)) => IRValue::Number(lhs + rhs),
-                    (IRValue::Vec2(x1, y1), IRValue::Vec2(x2, y2)) => {
-                        IRValue::Vec2(x1 + x2, y1 + y2)
-                    }
-                    (IRValue::Vec3(x1, y1, z1), IRValue::Vec3(x2, y2, z2)) => {
-                        IRValue::Vec3(x1 + x2, y1 + y2, z1 + z2)
-                    }
-                    (v1, _) => {
-                        return Err(EvalError::TypeError(TypeError {
-                            expected: vec![IRType::Number, IRType::Vec2, IRType::Vec3],
-                            found: v1.ir_type(),
-                        }))
-                    }
-                    (_, v2) => {
-                        return Err(EvalError::TypeError(TypeError {
-                            expected: vec![IRType::Number, IRType::Vec2, IRType::Vec3],
-                            found: v2.ir_type(),
-                        }))
-                    }
-                },
-                BinaryOp::Sub => match (vals.get(lhs)?, vals.get(rhs)?) {
-                    (IRValue::Number(n1), IRValue::Number(n2)) => IRValue::Number(n1 - n2),
-                    (IRValue::Vec2(x1, y1), IRValue::Vec2(x2, y2)) => {
-                        IRValue::Vec2(x1 - x2, y1 - y2)
-                    }
-                    (IRValue::Vec3(x1, y1, z1), IRValue::Vec3(x2, y2, z2)) => {
-                        IRValue::Vec3(x1 - x2, y1 - y2, z1 - z2)
-                    }
-                    (v1, _) => {
-                        return Err(EvalError::TypeError(TypeError {
-                            expected: vec![IRType::Number, IRType::Vec2, IRType::Vec3],
-                            found: v1.ir_type(),
-                        }))
-                    }
-                    (_, v2) => {
-                        return Err(EvalError::TypeError(TypeError {
-                            expected: vec![IRType::Number, IRType::Vec2, IRType::Vec3],
-                            found: v2.ir_type(),
-                        }))
-                    }
-                },
-                BinaryOp::Mul => match (vals.get(lhs)?, vals.get(rhs)?) {
-                    (IRValue::Number(lhs), IRValue::Number(rhs)) => IRValue::Number(lhs * rhs),
-                    (IRValue::Vec2(x1, y1), IRValue::Vec2(x2, y2)) => {
-                        IRValue::Number(x1 * x2 + y1 * y2)
-                    }
-                    (IRValue::Vec3(x1, y1, z1), IRValue::Vec3(x2, y2, z2)) => {
-                        IRValue::Number(x1 * x2 + y1 * y2 + z1 * z2)
-                    }
-                    (v1, _) => {
-                        return Err(EvalError::TypeError(TypeError {
-                            expected: vec![IRType::Number, IRType::Vec2, IRType::Vec3],
-                            found: v1.ir_type(),
-                        }))
-                    }
-                    (_, v2) => {
-                        return Err(EvalError::TypeError(TypeError {
-                            expected: vec![IRType::Number, IRType::Vec2, IRType::Vec3],
-                            found: v2.ir_type(),
-                        }))
-                    }
-                },
-                BinaryOp::Div => match (
-                    vals.get_typechecked(lhs, IRType::Number)?,
-                    vals.get_typechecked(rhs, IRType::Number)?,
-                ) {
-                    (IRValue::Number(n1), IRValue::Number(n2)) => IRValue::Number(n1 / n2),
-                    _ => unreachable!("should have been typechecked before"),
-                },
-                BinaryOp::Pow => match (
-                    vals.get_typechecked(lhs, IRType::Number)?,
-                    vals.get_typechecked(rhs, IRType::Number)?,
-                ) {
-                    (IRValue::Number(n1), IRValue::Number(n2)) => IRValue::Number(n1.pow(n2)),
-                    _ => unreachable!("Should have been typechecked before, should not happen"),
-                },
-                _ => todo!(),
-            },
-            &IROp::Comparison { lhs, comp, rhs } => match (
-                vals.get_typechecked(lhs, IRType::Number)?,
-                vals.get_typechecked(rhs, IRType::Number)?,
-            ) {
-                (IRValue::Number(lhs), IRValue::Number(rhs)) => IRValue::Bool(match comp {
-                    Comparison::Eq => lhs == rhs,
-                    Comparison::GreaterEq => lhs >= rhs,
-                    Comparison::Greater => lhs > rhs,
-                    Comparison::LessEq => lhs <= rhs,
-                    Comparison::Less => lhs < rhs,
-                }),
-                _ => unreachable!("Should have been typechecked before, should not happen"),
-            },
-            _ => todo!(),
-        };
+    let mut iter = bytecode.instructions.iter().cloned().peekable();
+    while let Some(op) = iter.next() {
+        let val = execute_instruction(op, &bytecode, &mut iter, &mut vals, &args)?;
         vals.push(val)
     }
 
     Err(EvalError::NoReturn)
+}
+
+fn execute_instruction(
+    op: IROp,
+    bytecode: &IRSegment,
+    iter: &mut Peekable<impl Iterator<Item = IROp>>,
+    vals: &mut ValStorage,
+    args: &Vec<IRValue>,
+) -> Result<IRValue, EvalError> {
+    Ok(match op {
+        IROp::Nop => IRValue::None,
+        IROp::LoadArg(id) => args[id.idx as usize].clone(),
+        IROp::Const(num) => IRValue::Number(num.into()),
+        IROp::IConst(num) => IRValue::Number(num.into()),
+        IROp::Vec2(x, y) => {
+            let expected = IRType::Number;
+            if let (IRValue::Number(x), IRValue::Number(y)) = (
+                vals.get_typechecked(x, expected)?,
+                vals.get_typechecked(y, expected)?,
+            ) {
+                let val = IRValue::Vec2(*x, *y);
+                val
+            } else {
+                unreachable!("Should have been typechecked before, should not happen")
+            }
+        }
+        IROp::Vec3(x, y, z) => {
+            let expected = IRType::Number;
+            if let (IRValue::Number(x), IRValue::Number(y), IRValue::Number(z)) = (
+                vals.get_typechecked(x, expected)?,
+                vals.get_typechecked(y, expected)?,
+                vals.get_typechecked(z, expected)?,
+            ) {
+                let val = IRValue::Vec3(*x, *y, *z);
+                val
+            } else {
+                unreachable!("Should have been typechecked before, should not happen")
+            }
+        }
+        IROp::Ret(id) => return vals.get(id).cloned(),
+        IROp::Binary(lhs, rhs, op) => match op {
+            BinaryOp::Add => match (vals.get(lhs)?, vals.get(rhs)?) {
+                (IRValue::Number(lhs), IRValue::Number(rhs)) => IRValue::Number(lhs + rhs),
+                (IRValue::Vec2(x1, y1), IRValue::Vec2(x2, y2)) => IRValue::Vec2(x1 + x2, y1 + y2),
+                (IRValue::Vec3(x1, y1, z1), IRValue::Vec3(x2, y2, z2)) => {
+                    IRValue::Vec3(x1 + x2, y1 + y2, z1 + z2)
+                }
+                (v1, _) => {
+                    return Err(EvalError::TypeError(TypeError {
+                        expected: vec![IRType::Number, IRType::Vec2, IRType::Vec3],
+                        found: v1.ir_type(),
+                    }))
+                }
+                (_, v2) => {
+                    return Err(EvalError::TypeError(TypeError {
+                        expected: vec![IRType::Number, IRType::Vec2, IRType::Vec3],
+                        found: v2.ir_type(),
+                    }))
+                }
+            },
+            BinaryOp::Sub => match (vals.get(lhs)?, vals.get(rhs)?) {
+                (IRValue::Number(n1), IRValue::Number(n2)) => IRValue::Number(n1 - n2),
+                (IRValue::Vec2(x1, y1), IRValue::Vec2(x2, y2)) => IRValue::Vec2(x1 - x2, y1 - y2),
+                (IRValue::Vec3(x1, y1, z1), IRValue::Vec3(x2, y2, z2)) => {
+                    IRValue::Vec3(x1 - x2, y1 - y2, z1 - z2)
+                }
+                (v1, _) => {
+                    return Err(EvalError::TypeError(TypeError {
+                        expected: vec![IRType::Number, IRType::Vec2, IRType::Vec3],
+                        found: v1.ir_type(),
+                    }))
+                }
+                (_, v2) => {
+                    return Err(EvalError::TypeError(TypeError {
+                        expected: vec![IRType::Number, IRType::Vec2, IRType::Vec3],
+                        found: v2.ir_type(),
+                    }))
+                }
+            },
+            BinaryOp::Mul => match (vals.get(lhs)?, vals.get(rhs)?) {
+                (IRValue::Number(lhs), IRValue::Number(rhs)) => IRValue::Number(lhs * rhs),
+                (IRValue::Vec2(x1, y1), IRValue::Vec2(x2, y2)) => {
+                    IRValue::Number(x1 * x2 + y1 * y2)
+                }
+                (IRValue::Vec3(x1, y1, z1), IRValue::Vec3(x2, y2, z2)) => {
+                    IRValue::Number(x1 * x2 + y1 * y2 + z1 * z2)
+                }
+                (v1, _) => {
+                    return Err(EvalError::TypeError(TypeError {
+                        expected: vec![IRType::Number, IRType::Vec2, IRType::Vec3],
+                        found: v1.ir_type(),
+                    }))
+                }
+                (_, v2) => {
+                    return Err(EvalError::TypeError(TypeError {
+                        expected: vec![IRType::Number, IRType::Vec2, IRType::Vec3],
+                        found: v2.ir_type(),
+                    }))
+                }
+            },
+            BinaryOp::Div => match (
+                vals.get_typechecked(lhs, IRType::Number)?,
+                vals.get_typechecked(rhs, IRType::Number)?,
+            ) {
+                (IRValue::Number(n1), IRValue::Number(n2)) => IRValue::Number(n1 / n2),
+                _ => unreachable!("should have been typechecked before"),
+            },
+            BinaryOp::Pow => match (
+                vals.get_typechecked(lhs, IRType::Number)?,
+                vals.get_typechecked(rhs, IRType::Number)?,
+            ) {
+                (IRValue::Number(n1), IRValue::Number(n2)) => IRValue::Number(n1.pow(n2)),
+                _ => unreachable!("Should have been typechecked before, should not happen"),
+            },
+            _ => todo!(),
+        },
+        IROp::Comparison { lhs, comp, rhs } => match (
+            vals.get_typechecked(lhs, IRType::Number)?,
+            vals.get_typechecked(rhs, IRType::Number)?,
+        ) {
+            (IRValue::Number(lhs), IRValue::Number(rhs)) => IRValue::Bool(match comp {
+                Comparison::Eq => lhs == rhs,
+                Comparison::GreaterEq => lhs >= rhs,
+                Comparison::Greater => lhs > rhs,
+                Comparison::LessEq => lhs <= rhs,
+                Comparison::Less => lhs < rhs,
+            }),
+            _ => unreachable!("Should have been typechecked before, should not happen"),
+        },
+        IROp::Unary(id, op) => {
+            if let IRValue::Number(val) = vals.get_typechecked(id, IRType::Number)? {
+                IRValue::Number(match op {
+                    UnaryOp::Neg => -*val,
+                    UnaryOp::Sqrt => call_irrational!(val, sqrt).into(),
+
+                    UnaryOp::Sin => call_irrational!(val, sin).into(),
+                    UnaryOp::Cos => call_irrational!(val, cos).into(),
+                    UnaryOp::Cot => (1.0 / call_irrational!(val, tan)).into(),
+                    UnaryOp::Tan => call_irrational!(val, tan).into(),
+                    UnaryOp::Sec => (1.0 / call_irrational!(val, sin)).into(),
+                    UnaryOp::Csc => (1.0 / call_irrational!(val, cos)).into(),
+
+                    UnaryOp::InvSin => call_irrational!(val, asin).into(),
+                    UnaryOp::InvCos => call_irrational!(val, acos).into(),
+                    UnaryOp::InvTan => call_irrational!(val, atan).into(),
+                    UnaryOp::InvCot => (PI / 2.0 - call_irrational!(val, atan)).into(),
+                    UnaryOp::InvCsc => {
+                        let inv = &(&Number::Double(1.0) / val);
+                        (call_irrational!(inv, asin)).into()
+                    }
+                    UnaryOp::InvSec => {
+                        let inv = &(&Number::Double(1.0) / val);
+                        (call_irrational!(inv, acos)).into()
+                    }
+                    UnaryOp::Ceil => val.ceil(),
+                    UnaryOp::Floor => val.floor(),
+                    UnaryOp::Gamma => todo!("Implement gamma function"),
+                })
+            } else {
+                unreachable!("Should have been typechecked before, should not happen")
+            }
+        }
+        IROp::FnCall(f_id) => {
+            let mut args = Vec::new();
+            while let Some(IROp::FnArg(id)) = iter.peek() {
+                args.push(vals.get(*id)?.clone());
+                vals.push(IRValue::None);
+            }
+            if let Some(f) = bytecode.dependencies.get(&f_id) {
+                eval(f, args)?
+            } else {
+                return Err(EvalError::MissingFunction(f_id));
+            }
+        }
+
+        _ => todo!(),
+    })
 }
 
 #[cfg(test)]

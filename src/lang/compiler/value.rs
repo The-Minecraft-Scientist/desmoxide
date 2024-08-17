@@ -1,9 +1,9 @@
 use std::{
     cmp::Ordering,
-    ops::{Add, Div, Mul, Sub},
+    ops::{Add, Div, Mul, Neg, Sub},
 };
 
-use num::{pow::Pow, rational::Ratio, ToPrimitive};
+use num::{pow::Pow, rational::Ratio, Float, ToPrimitive};
 
 use super::ir::IRType;
 
@@ -40,6 +40,35 @@ pub enum Number {
     Fraction(Ratio<i64>),
     Double(f64),
     Undefined,
+}
+
+#[macro_export]
+macro_rules! call_irrational {
+    ($var:ident, $method:ident) => {
+        match $var {
+            &Number::Double($var) => $var.$method(),
+            &Number::Fraction($var) => $var.to_f64().unwrap().$method(),
+            &Number::Undefined => f64::NAN,
+        }
+    };
+}
+
+impl Number {
+    pub fn ceil(&self) -> Number {
+        match self {
+            &Number::Double(n) => n.ceil().into(),
+            &Number::Fraction(n) => n.ceil().into(),
+            &Number::Undefined => Number::Undefined,
+        }
+    }
+
+    pub fn floor(&self) -> Number {
+        match self {
+            &Number::Double(n) => n.floor().into(),
+            &Number::Fraction(n) => n.floor().into(),
+            &Number::Undefined => Number::Undefined,
+        }
+    }
 }
 
 impl From<f64> for Number {
@@ -176,6 +205,17 @@ impl PartialEq for Number {
             (Number::Double(lhs), Number::Fraction(rhs)) => lhs.eq(&rhs.to_f64().unwrap()),
             (Number::Undefined, _) => false,
             (_, Number::Undefined) => false,
+        }
+    }
+}
+
+impl Neg for Number {
+    type Output = Number;
+    fn neg(self) -> Number {
+        match self {
+            Number::Double(n) => Number::Double(-n),
+            Number::Fraction(n) => Number::Fraction(-n),
+            Number::Undefined => Number::Undefined,
         }
     }
 }
