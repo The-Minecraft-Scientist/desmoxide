@@ -7,7 +7,7 @@ use thiserror::Error;
 use crate::{
     call_irrational,
     lang::{
-        ast::{BinaryOp, Comparison, UnaryOp},
+        ast::{BinaryOp, Comparison, CoordinateAccess, UnaryOp},
         compiler::{
             ir::{FunctionId, IROp, IRSegment, IRType, Id},
             value::{IRValue, Number},
@@ -84,14 +84,19 @@ pub enum EvalError {
     MissingVal(u32),
     #[error(transparent)]
     TypeError(TypeError),
-    #[error("Missing function")]
+    #[error("Missing function: {0:?}")]
     MissingFunction(FunctionId),
+    #[error("Invalid coordinate access")]
+    InvalidCoordinateAccses(IRType, CoordinateAccess),
 }
 
 pub fn eval(bytecode: &IRSegment, args: Vec<IRValue>) -> Result<IRValue, EvalError> {
     let mut vals = ValStorage::new();
     let mut iter = bytecode.instructions.iter().cloned().peekable();
     while let Some(op) = iter.next() {
+        if let IROp::Ret(id) = op {
+            return vals.get(id).cloned();
+        }
         let val = execute_instruction(op, &bytecode, &mut iter, &mut vals, &args)?;
         vals.push(val)
     }
@@ -136,7 +141,6 @@ fn execute_instruction(
                 unreachable!("Should have been typechecked before, should not happen")
             }
         }
-        IROp::Ret(id) => return vals.get(id).cloned(),
         IROp::Binary(lhs, rhs, op) => match op {
             BinaryOp::Add => match (vals.get(lhs)?, vals.get(rhs)?) {
                 (IRValue::Number(lhs), IRValue::Number(rhs)) => IRValue::Number(lhs + rhs),
@@ -264,6 +268,7 @@ fn execute_instruction(
             while let Some(IROp::FnArg(id)) = iter.peek() {
                 args.push(vals.get(*id)?.clone());
                 vals.push(IRValue::None);
+                iter.next();
             }
             if let Some(f) = bytecode.dependencies.get(&f_id) {
                 eval(f, args)?
@@ -271,7 +276,27 @@ fn execute_instruction(
                 return Err(EvalError::MissingFunction(f_id));
             }
         }
-
+        IROp::CoordinateOf(id, accses) => match vals.get(id)? {
+            IRValue::Vec2(x, y) => match accses {
+                CoordinateAccess::DotAccessX => IRValue::Number(*x),
+                CoordinateAccess::DotAccessY => IRValue::Number(*y),
+                CoordinateAccess::DotAccessZ => {
+                    return Err(EvalError::InvalidCoordinateAccses(IRType::Vec2, accses))
+                }
+            },
+            IRValue::Vec3(x, y, z) => match accses {
+                CoordinateAccess::DotAccessX => IRValue::Number(*x),
+                CoordinateAccess::DotAccessY => IRValue::Number(*y),
+                CoordinateAccess::DotAccessZ => IRValue::Number(*z),
+            },
+            v => {
+                return Err(EvalError::TypeError(TypeError {
+                    expected: vec![IRType::Vec2, IRType::Vec3],
+                    found: v.ir_type(),
+                }))
+            }
+        },
+        IROp::Ret(_) => unreachable!("Should have executed return before"),
         _ => todo!(),
     })
 }
