@@ -1,8 +1,41 @@
-use std::ops::{Add, Div, Mul, Sub};
+use std::{
+    cmp::Ordering,
+    ops::{Add, Div, Mul, Sub},
+};
 
 use num::{pow::Pow, rational::Ratio, ToPrimitive};
 
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+use super::ir::IRType;
+
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[repr(u8)]
+pub enum IRValue {
+    None,
+    Bool(bool),
+    Number(Number),
+    Vec2(Number, Number),
+    Vec3(Number, Number, Number),
+    NumberList(Vec<Number>),
+    Vec2List(Vec<(Number, Number)>),
+    Vec3List(Vec<(Number, Number, Number)>),
+}
+
+impl IRValue {
+    pub fn ir_type(&self) -> IRType {
+        match self {
+            Self::None => IRType::Never,
+            Self::Bool(bool) => IRType::Bool,
+            Self::Number(_) => IRType::Number,
+            Self::Vec2(_, _) => IRType::Vec2,
+            Self::Vec3(_, _, _) => IRType::Vec3,
+            Self::NumberList(_) => IRType::NumberList,
+            Self::Vec2List(_) => IRType::Vec2List,
+            Self::Vec3List(_) => IRType::Vec3List,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
 pub enum Number {
     Fraction(Ratio<i64>),
     Double(f64),
@@ -116,6 +149,36 @@ impl_op!(Add, add);
 impl_op!(Sub, sub);
 impl_op!(Mul, mul);
 impl_op!(Div, div);
+
+impl PartialOrd for Number {
+    fn partial_cmp(&self, rhs: &Self) -> Option<Ordering> {
+        match (self, rhs) {
+            (Number::Double(lhs), Number::Double(rhs)) => lhs.partial_cmp(rhs),
+
+            (Number::Fraction(lhs), Number::Fraction(rhs)) => lhs.partial_cmp(rhs),
+
+            (Number::Fraction(lhs), Number::Double(rhs)) => lhs.to_f64().unwrap().partial_cmp(rhs),
+
+            (Number::Double(lhs), Number::Fraction(rhs)) => lhs.partial_cmp(&rhs.to_f64().unwrap()),
+
+            (Number::Undefined, _) => None,
+            (_, Number::Undefined) => None,
+        }
+    }
+}
+
+impl PartialEq for Number {
+    fn eq(&self, rhs: &Self) -> bool {
+        match (self, rhs) {
+            (Number::Double(lhs), Number::Double(rhs)) => lhs.eq(rhs),
+            (Number::Fraction(lhs), Number::Fraction(rhs)) => lhs.eq(rhs),
+            (Number::Fraction(lhs), Number::Double(rhs)) => lhs.to_f64().unwrap().eq(rhs),
+            (Number::Double(lhs), Number::Fraction(rhs)) => lhs.eq(&rhs.to_f64().unwrap()),
+            (Number::Undefined, _) => false,
+            (_, Number::Undefined) => false,
+        }
+    }
+}
 
 impl Pow<Number> for Number {
     type Output = Number;

@@ -45,32 +45,6 @@ impl IRSegment {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
-#[repr(u8)]
-pub enum IRValue {
-    None,
-    Number(Number),
-    Vec2(Number, Number),
-    Vec3(Number, Number, Number),
-    NumberList(Vec<f64>),
-    Vec2List(Vec<(f64, f64)>),
-    Vec3List(Vec<(f64, f64, f64)>),
-}
-
-impl IRValue {
-    pub fn ir_type(&self) -> IRType {
-        match self {
-            Self::None => IRType::Never,
-            Self::Number(_) => IRType::Number,
-            Self::Vec2(_, _) => IRType::Vec2,
-            Self::Vec3(_, _, _) => IRType::Vec3,
-            Self::NumberList(_) => IRType::NumberList,
-            Self::Vec2List(_) => IRType::Vec2List,
-            Self::Vec3List(_) => IRType::Vec3List,
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u8)]
 pub enum IRType {

@@ -5,10 +5,10 @@ use num::{pow::Pow, rational::Ratio};
 use thiserror::Error;
 
 use crate::lang::{
-    ast::BinaryOp,
+    ast::{BinaryOp, Comparison},
     compiler::{
-        ir::{IROp, IRSegment, IRType, IRValue, Id},
-        value::Number,
+        ir::{IROp, IRSegment, IRType, Id},
+        value::{IRValue, Number},
     },
 };
 
@@ -91,35 +91,35 @@ pub fn eval(bytecode: &IRSegment, args: Vec<IRValue>) -> Result<IRValue, EvalErr
             &IROp::LoadArg(id) => args[id.idx as usize].clone(),
             &IROp::Const(num) => IRValue::Number(num.into()),
             &IROp::IConst(num) => IRValue::Number(num.into()),
-            &IROp::Vec2(arg1, arg2) => {
+            &IROp::Vec2(x, y) => {
                 let expected = IRType::Number;
-                if let (IRValue::Number(n1), IRValue::Number(n2)) = (
-                    vals.get_typechecked(arg1, expected)?,
-                    vals.get_typechecked(arg2, expected)?,
+                if let (IRValue::Number(x), IRValue::Number(y)) = (
+                    vals.get_typechecked(x, expected)?,
+                    vals.get_typechecked(y, expected)?,
                 ) {
-                    let val = IRValue::Vec2(*n1, *n2);
+                    let val = IRValue::Vec2(*x, *y);
                     val
                 } else {
                     unreachable!("Should have been typechecked before, should not happen")
                 }
             }
-            &IROp::Vec3(arg1, arg2, arg3) => {
+            &IROp::Vec3(x, y, z) => {
                 let expected = IRType::Number;
-                if let (IRValue::Number(n1), IRValue::Number(n2), IRValue::Number(n3)) = (
-                    vals.get_typechecked(arg1, expected)?,
-                    vals.get_typechecked(arg2, expected)?,
-                    vals.get_typechecked(arg3, expected)?,
+                if let (IRValue::Number(x), IRValue::Number(y), IRValue::Number(z)) = (
+                    vals.get_typechecked(x, expected)?,
+                    vals.get_typechecked(y, expected)?,
+                    vals.get_typechecked(z, expected)?,
                 ) {
-                    let val = IRValue::Vec3(*n1, *n2, *n3);
+                    let val = IRValue::Vec3(*x, *y, *z);
                     val
                 } else {
                     unreachable!("Should have been typechecked before, should not happen")
                 }
             }
             &IROp::Ret(id) => return vals.get(id).cloned(),
-            &IROp::Binary(arg1, arg2, op) => match op {
-                BinaryOp::Add => match (vals.get(arg1)?, vals.get(arg2)?) {
-                    (IRValue::Number(n1), IRValue::Number(n2)) => IRValue::Number(n1 + n2),
+            &IROp::Binary(lhs, rhs, op) => match op {
+                BinaryOp::Add => match (vals.get(lhs)?, vals.get(rhs)?) {
+                    (IRValue::Number(lhs), IRValue::Number(rhs)) => IRValue::Number(lhs + rhs),
                     (IRValue::Vec2(x1, y1), IRValue::Vec2(x2, y2)) => {
                         IRValue::Vec2(x1 + x2, y1 + y2)
                     }
@@ -139,7 +139,7 @@ pub fn eval(bytecode: &IRSegment, args: Vec<IRValue>) -> Result<IRValue, EvalErr
                         }))
                     }
                 },
-                BinaryOp::Sub => match (vals.get(arg1)?, vals.get(arg2)?) {
+                BinaryOp::Sub => match (vals.get(lhs)?, vals.get(rhs)?) {
                     (IRValue::Number(n1), IRValue::Number(n2)) => IRValue::Number(n1 - n2),
                     (IRValue::Vec2(x1, y1), IRValue::Vec2(x2, y2)) => {
                         IRValue::Vec2(x1 - x2, y1 - y2)
@@ -160,8 +160,8 @@ pub fn eval(bytecode: &IRSegment, args: Vec<IRValue>) -> Result<IRValue, EvalErr
                         }))
                     }
                 },
-                BinaryOp::Mul => match (vals.get(arg1)?, vals.get(arg2)?) {
-                    (IRValue::Number(n1), IRValue::Number(n2)) => IRValue::Number(n1 * n2),
+                BinaryOp::Mul => match (vals.get(lhs)?, vals.get(rhs)?) {
+                    (IRValue::Number(lhs), IRValue::Number(rhs)) => IRValue::Number(lhs * rhs),
                     (IRValue::Vec2(x1, y1), IRValue::Vec2(x2, y2)) => {
                         IRValue::Number(x1 * x2 + y1 * y2)
                     }
@@ -182,20 +182,33 @@ pub fn eval(bytecode: &IRSegment, args: Vec<IRValue>) -> Result<IRValue, EvalErr
                     }
                 },
                 BinaryOp::Div => match (
-                    vals.get_typechecked(arg1, IRType::Number)?,
-                    vals.get_typechecked(arg2, IRType::Number)?,
+                    vals.get_typechecked(lhs, IRType::Number)?,
+                    vals.get_typechecked(rhs, IRType::Number)?,
                 ) {
                     (IRValue::Number(n1), IRValue::Number(n2)) => IRValue::Number(n1 / n2),
                     _ => unreachable!("should have been typechecked before"),
                 },
                 BinaryOp::Pow => match (
-                    vals.get_typechecked(arg1, IRType::Number)?,
-                    vals.get_typechecked(arg2, IRType::Number)?,
+                    vals.get_typechecked(lhs, IRType::Number)?,
+                    vals.get_typechecked(rhs, IRType::Number)?,
                 ) {
                     (IRValue::Number(n1), IRValue::Number(n2)) => IRValue::Number(n1.pow(n2)),
                     _ => unreachable!("Should have been typechecked before, should not happen"),
                 },
                 _ => todo!(),
+            },
+            &IROp::Comparison { lhs, comp, rhs } => match (
+                vals.get_typechecked(lhs, IRType::Number)?,
+                vals.get_typechecked(rhs, IRType::Number)?,
+            ) {
+                (IRValue::Number(lhs), IRValue::Number(rhs)) => IRValue::Bool(match comp {
+                    Comparison::Eq => lhs == rhs,
+                    Comparison::GreaterEq => lhs >= rhs,
+                    Comparison::Greater => lhs > rhs,
+                    Comparison::LessEq => lhs <= rhs,
+                    Comparison::Less => lhs < rhs,
+                }),
+                _ => unreachable!("Should have been typechecked before, should not happen"),
             },
             _ => todo!(),
         };
@@ -211,7 +224,10 @@ mod tests {
     mod eval_tests {
         use crate::lang::{
             ast::BinaryOp,
-            compiler::ir::{IRInstructionSeq, IROp, IRSegment, IRType, IRValue, Id},
+            compiler::{
+                ir::{IRInstructionSeq, IROp, IRSegment, IRType, Id},
+                value::IRValue,
+            },
         };
 
         use super::super::eval;
