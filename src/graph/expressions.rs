@@ -23,12 +23,12 @@ pub struct FnId {
     pub t: IRType,
 }
 #[derive(Debug)]
-pub struct Expressions<'a> {
-    pub storage: &'a HashMap<ExpressionId, &'a str>,
+pub struct Expressions<'a, 'b> {
+    pub storage: &'b HashMap<ExpressionId, &'a str>,
     pub meta: HashMap<ExpressionId, ExpressionMeta<'a>>,
     pub ident_lookup: HashMap<&'a str, ExpressionId>,
 }
-impl<'a> Expressions<'a> {
+impl<'a, 'b> Expressions<'a, 'b> {
     pub fn new(lines: &'a HashMap<ExpressionId, &'a str>) -> Self {
         Self {
             meta: HashMap::with_capacity(lines.len()),
@@ -223,7 +223,7 @@ pub enum EquationType {
     InEq(Comparison),
 }
 
-impl<'a> ExpressionProvider<'a> for Expressions<'a> {
+impl<'a, 'b> ExpressionProvider<'a> for Expressions<'a, 'b> {
     fn get_ident_id(&self, ident: &str) -> Result<crate::lang::expression_provider::ExpressionId> {
         self.ident_lookup
             .get(ident)

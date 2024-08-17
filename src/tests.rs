@@ -44,7 +44,9 @@ fn test_compile_fn(path: &'static str, func: &'static str) {
         val.instructions.len()
     );
 }
-pub fn parse_graph_exprs<'a>(exprs: &'a HashMap<ExpressionId, &'a str>) -> Expressions<'a> {
+pub fn parse_graph_exprs<'a, 'b: 'a>(
+    exprs: &'b HashMap<ExpressionId, &'a str>,
+) -> Expressions<'a, 'b> {
     let mut p = Expressions::new(exprs);
     p.parse_all().unwrap();
     p

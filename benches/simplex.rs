@@ -29,7 +29,9 @@ fn benchmark_parse(c: &mut Criterion) {
     });
 }
 
-pub fn parse_graph_exprs<'a>(exprs: &'a HashMap<ExpressionId, &'a str>) -> Expressions<'a> {
+pub fn parse_graph_exprs<'a, 'b: 'a>(
+    exprs: &'a HashMap<ExpressionId, &'a str>,
+) -> Expressions<'a, 'b> {
     let mut p = Expressions::new(exprs);
     p.parse_all().unwrap();
     p
