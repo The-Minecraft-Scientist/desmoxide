@@ -1,7 +1,7 @@
 use core::fmt;
 use std::{error::Error, ops::Index};
 
-use num::rational::Ratio;
+use num::{pow::Pow, rational::Ratio};
 use thiserror::Error;
 
 use crate::lang::{
@@ -192,7 +192,7 @@ pub fn eval(bytecode: &IRSegment, args: Vec<IRValue>) -> Result<IRValue, EvalErr
                     vals.get_typechecked(arg1, IRType::Number)?,
                     vals.get_typechecked(arg2, IRType::Number)?,
                 ) {
-                    (IRValue::Number(n1), IRValue::Number(n2)) => IRValue::Number(n1 / n2),
+                    (IRValue::Number(n1), IRValue::Number(n2)) => IRValue::Number(n1.pow(n2)),
                     _ => unreachable!("Should have been typechecked before, should not happen"),
                 },
                 _ => todo!(),
