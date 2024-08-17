@@ -1,11 +1,15 @@
 use core::fmt;
 use std::{error::Error, ops::Index};
 
+use num::rational::Ratio;
 use thiserror::Error;
 
 use crate::lang::{
     ast::BinaryOp,
-    compiler::ir::{IROp, IRSegment, IRType, IRValue, Id},
+    compiler::{
+        ir::{IROp, IRSegment, IRType, IRValue, Id},
+        value::Number,
+    },
 };
 
 struct ValStorage {
@@ -85,8 +89,8 @@ pub fn eval(bytecode: &IRSegment, args: Vec<IRValue>) -> Result<IRValue, EvalErr
         let val = match op {
             &IROp::Nop => IRValue::None,
             &IROp::LoadArg(id) => args[id.idx as usize].clone(),
-            &IROp::Const(num) => IRValue::Number(num),
-            &IROp::IConst(num) => IRValue::Number(num as f64),
+            &IROp::Const(num) => IRValue::Number(num.into()),
+            &IROp::IConst(num) => IRValue::Number(num.into()),
             &IROp::Vec2(arg1, arg2) => {
                 let expected = IRType::Number;
                 if let (IRValue::Number(n1), IRValue::Number(n2)) = (
@@ -96,7 +100,7 @@ pub fn eval(bytecode: &IRSegment, args: Vec<IRValue>) -> Result<IRValue, EvalErr
                     let val = IRValue::Vec2(*n1, *n2);
                     val
                 } else {
-                    unreachable!("type check failed, this should not happen")
+                    unreachable!("Should have been typechecked before, should not happen")
                 }
             }
             &IROp::Vec3(arg1, arg2, arg3) => {
@@ -109,7 +113,7 @@ pub fn eval(bytecode: &IRSegment, args: Vec<IRValue>) -> Result<IRValue, EvalErr
                     let val = IRValue::Vec3(*n1, *n2, *n3);
                     val
                 } else {
-                    unreachable!("type check failed, this should not happen")
+                    unreachable!("Should have been typechecked before, should not happen")
                 }
             }
             &IROp::Ret(id) => return vals.get(id).cloned(),
@@ -157,7 +161,7 @@ pub fn eval(bytecode: &IRSegment, args: Vec<IRValue>) -> Result<IRValue, EvalErr
                     }
                 },
                 BinaryOp::Mul => match (vals.get(arg1)?, vals.get(arg2)?) {
-                    (IRValue::Number(n1), IRValue::Number(n2)) => IRValue::Number(n1 + n2),
+                    (IRValue::Number(n1), IRValue::Number(n2)) => IRValue::Number(n1 * n2),
                     (IRValue::Vec2(x1, y1), IRValue::Vec2(x2, y2)) => {
                         IRValue::Number(x1 * x2 + y1 * y2)
                     }
@@ -176,6 +180,20 @@ pub fn eval(bytecode: &IRSegment, args: Vec<IRValue>) -> Result<IRValue, EvalErr
                             found: v2.ir_type(),
                         }))
                     }
+                },
+                BinaryOp::Div => match (
+                    vals.get_typechecked(arg1, IRType::Number)?,
+                    vals.get_typechecked(arg2, IRType::Number)?,
+                ) {
+                    (IRValue::Number(n1), IRValue::Number(n2)) => IRValue::Number(n1 / n2),
+                    _ => unreachable!("should have been typechecked before"),
+                },
+                BinaryOp::Pow => match (
+                    vals.get_typechecked(arg1, IRType::Number)?,
+                    vals.get_typechecked(arg2, IRType::Number)?,
+                ) {
+                    (IRValue::Number(n1), IRValue::Number(n2)) => IRValue::Number(n1 / n2),
+                    _ => unreachable!("Should have been typechecked before, should not happen"),
                 },
                 _ => todo!(),
             },
@@ -225,7 +243,7 @@ mod tests {
                           IROp::Binary(Id::new(0, IRType::Number), Id::new(0, IRType::Number), BinaryOp::Add),
                           IROp::Ret(Id::new(1, IRType::Number))],
                           args: vec![],
-                          expected: IRValue::Number(2.0)},
+                          expected: IRValue::Number(2.0.into())},
 
             test_args: {ir: vec![IROp::Const(1.0),
                           IROp::LoadArg(ArgId{
@@ -233,7 +251,7 @@ mod tests {
                               t: IRType::Number
                           }),
                           IROp::Binary(Id::new(0, IRType::Number), Id::new(1, IRType::Number), BinaryOp::Add),
-                          IROp::Ret(Id::new(2, IRType::Number))], args: vec![IRValue::Number(1.0)], expected: IRValue::Number(2.0)},
+                          IROp::Ret(Id::new(2, IRType::Number))], args: vec![IRValue::Number(2.0.into())], expected: IRValue::Number(3.0.into())},
         }
     }
 }

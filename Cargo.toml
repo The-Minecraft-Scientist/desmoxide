@@ -16,6 +16,7 @@ strum = { version = "0.26.2", features = ["derive"] }
 thin-vec = "0.2.12"
 shrinkwraprs = "0.3.0"
 smol_str = "0.2.2"
+num = "0.4"
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }

@@ -1,4 +1,5 @@
 use core::slice;
+use std::ops::{Add, Div, Mul, Sub};
 use std::{collections::HashMap, num::NonZeroU32, sync::Arc};
 
 use anyhow::{bail, Context, Result};
@@ -8,6 +9,7 @@ use shrinkwraprs::Shrinkwrap;
 use strum::{AsRefStr, Display};
 
 use super::super::ast::{BinaryOp, Comparison, CoordinateAccess, UnaryOp};
+use super::value::Number;
 use crate::lang::expression_provider::ExpressionId;
 use crate::{graph::expressions::FnId, util::Discard};
 
@@ -47,13 +49,14 @@ impl IRSegment {
 #[repr(u8)]
 pub enum IRValue {
     None,
-    Number(f64),
-    Vec2(f64, f64),
-    Vec3(f64, f64, f64),
+    Number(Number),
+    Vec2(Number, Number),
+    Vec3(Number, Number, Number),
     NumberList(Vec<f64>),
     Vec2List(Vec<(f64, f64)>),
     Vec3List(Vec<(f64, f64, f64)>),
 }
+
 impl IRValue {
     pub fn ir_type(&self) -> IRType {
         match self {
