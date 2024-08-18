@@ -41,7 +41,8 @@ pub struct Expressions {
 
 #[derive(Debug)]
 pub struct CompiledEquations {
-    pub compiled_equations: Vec<Result<(Option<IRSegment>, Option<IRSegment>, EquationType)>>,
+    pub compiled_equations:
+        HashMap<ExpressionId, Result<(Option<IRSegment>, Option<IRSegment>, EquationType)>>,
     pub fn_cache: HashMap<(u32, Vec<IRType>), Arc<IRSegment>>,
 }
 
@@ -55,6 +56,9 @@ impl Expressions {
             ident_lookup: HashMap::with_capacity(len / 2),
         }
     }
+
+    pub fn set_equation(&mut self) {}
+
     pub fn line_lexer(&self, line: ExpressionId) -> Result<MultiPeek<LexIter<'_, Token>>> {
         Ok(MultiPeek::new(LexIter::new(Token::lexer(
             self.storage
@@ -69,34 +73,76 @@ impl Expressions {
         CompiledEquations {
             compiled_equations: self
                 .meta
-                .keys()
-                .map(|k| {
-                    let meta = self.meta.get(k).context("failed to get meta for line")?;
-                    Ok(match meta.expression_type {
-                        Some(ExpressionType::Eq { eq_type }) => {
-                            let lhs = meta
-                                .latest_lhs_ast
-                                .as_ref()
-                                .map(|ast| frontend.compile_expr(&ast))
-                                .transpose()?;
+                .iter()
+                .map(|(k, meta)| {
+                    (
+                        k.clone(),
+                        (|| {
+                            Ok(match meta.expression_type {
+                                Some(ExpressionType::Eq { eq_type }) => {
+                                    let lhs = meta
+                                        .latest_lhs_ast
+                                        .as_ref()
+                                        .map(|ast| frontend.compile_expr(&ast))
+                                        .transpose()?;
 
-                            let rhs = meta
-                                .latest_lhs_ast
-                                .as_ref()
-                                .map(|ast| frontend.compile_expr(&ast))
-                                .transpose()?;
+                                    let rhs = meta
+                                        .latest_lhs_ast
+                                        .as_ref()
+                                        .map(|ast| frontend.compile_expr(&ast))
+                                        .transpose()?;
 
-                            Some((lhs, rhs, eq_type))
-                        }
-                        Some(ExpressionType::Fn { .. }) => None,
-                        Some(ExpressionType::Var(..)) => None,
-                        None => None,
-                    })
+                                    Some((lhs, rhs, eq_type))
+                                }
+                                Some(ExpressionType::Fn { .. }) => None,
+                                Some(ExpressionType::Var(..)) => None,
+                                None => None,
+                            })
+                        })(),
+                    )
                 })
-                .filter_map(|eq| eq.transpose())
+                .filter_map(|(k, eq)| match eq.transpose() {
+                    Some(eq) => Some((k, eq)),
+                    None => None,
+                })
                 .collect(),
             fn_cache: frontend.fn_cache,
         }
+    }
+
+    pub fn compile_expr(
+        &self,
+        eqs: &mut CompiledEquations,
+        idx: ExpressionId,
+    ) -> Result<Option<(Option<IRSegment>, Option<IRSegment>, EquationType)>> {
+        let meta = self.meta.get(&idx).context("failed to get line")?;
+        // TODO: REMOVE CLONE
+        let mut frontend = Frontend {
+            ctx: self,
+            fn_cache: eqs.fn_cache.clone(),
+        };
+        let compiled = match meta.expression_type {
+            Some(ExpressionType::Eq { eq_type }) => {
+                let lhs = meta
+                    .latest_lhs_ast
+                    .as_ref()
+                    .map(|ast| frontend.compile_expr(&ast))
+                    .transpose()?;
+
+                let rhs = meta
+                    .latest_lhs_ast
+                    .as_ref()
+                    .map(|ast| frontend.compile_expr(&ast))
+                    .transpose()?;
+
+                Some((lhs, rhs, eq_type))
+            }
+            Some(ExpressionType::Fn { .. }) => None,
+            Some(ExpressionType::Var(..)) => None,
+            None => None,
+        };
+
+        Ok(compiled)
     }
 
     pub(crate) fn cache_compiled_fn(&self, idx: u32, t: IRType, ir: IRSegment) -> Result<()> {
