@@ -36,6 +36,7 @@ pub struct Expressions {
     pub storage: HashMap<ExpressionId, String>,
     pub meta: HashMap<ExpressionId, ExpressionMeta>,
     pub ident_lookup: HashMap<Ident, ExpressionId>,
+    pub errors: HashMap<ExpressionId, String>,
 }
 
 #[derive(Debug)]
@@ -48,6 +49,7 @@ impl Expressions {
     pub fn new(lines: HashMap<ExpressionId, String>) -> Self {
         let len = lines.len();
         Self {
+            errors: HashMap::new(),
             meta: HashMap::with_capacity(len),
             storage: lines,
             ident_lookup: HashMap::with_capacity(len / 2),
@@ -188,11 +190,19 @@ impl Expressions {
     pub fn parse_all(&mut self) -> Result<()> {
         let keys = self.storage.keys().cloned().collect::<Vec<_>>();
         for i in keys {
-            self.parse_expr(i)?;
+            match self.parse_expr(i) {
+                Ok((ident, meta)) => {
+                    self.meta.insert(i, meta);
+                    ident.map(|ident| self.ident_lookup.insert(ident, i));
+                }
+                Err(e) => {
+                    self.errors.insert(i, e.to_string());
+                }
+            }
         }
         Ok(())
     }
-    pub fn parse_expr(&mut self, idx: ExpressionId) -> Result<()> {
+    pub fn parse_expr(&mut self, idx: ExpressionId) -> Result<(Option<Ident>, ExpressionMeta)> {
         let (mut lex, ident, mut meta) = self.scan_expression_type(idx)?;
         let mut rhs = None;
         if let Some(_) = lex.peek_next() {
@@ -204,10 +214,7 @@ impl Expressions {
             meta.latest_rhs_ast = rhs;
         }
 
-        self.meta.insert(idx, meta);
-        ident.map(|ident| self.ident_lookup.insert(ident, idx));
-
-        Ok(())
+        Ok((ident, meta))
     }
 }
 
