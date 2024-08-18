@@ -16,19 +16,19 @@ use anyhow::{bail, Context, Result};
 use thin_vec::ThinVec;
 
 #[derive(Debug)]
-pub struct Frontend<'borrow, 'source> {
-    pub ctx: &'borrow dyn ExpressionProvider<'source>,
+pub struct Frontend<'borrow> {
+    pub ctx: &'borrow dyn ExpressionProvider,
     pub fn_cache: HashMap<(u32, Vec<IRType>), Arc<IRSegment>>,
 }
 
-impl<'borrow, 'source> Frontend<'borrow, 'source> {
-    pub fn new(ctx: &'borrow dyn ExpressionProvider<'source>) -> Self {
+impl<'borrow> Frontend<'borrow> {
+    pub fn new(ctx: &'borrow dyn ExpressionProvider) -> Self {
         Self {
             ctx,
             fn_cache: HashMap::with_capacity(10),
         }
     }
-    pub fn compile_expr(&mut self, expr: &'borrow AST<'source>) -> Result<IRSegment> {
+    pub fn compile_expr(&mut self, expr: &'borrow AST) -> Result<IRSegment> {
         let mut frame = Frame::empty();
         let mut segment = IRSegment::new(vec![IRType::Number, IRType::Number]);
         let x = segment.instructions.place(IROp::LoadArg(ArgId {
@@ -56,8 +56,8 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
     fn compile_fn(
         &mut self,
         arg_types: Vec<IRType>,
-        args: &ThinVec<Ident<'source>>,
-        expr: &'borrow AST<'source>,
+        args: &'borrow ThinVec<Ident>,
+        expr: &'borrow AST,
     ) -> Result<IRSegment> {
         let mut frame = Frame::empty();
         let mut scope = Scope::with_capacity(args.len());
@@ -101,7 +101,7 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
         self.fn_cache.insert((*id, k.1), Arc::clone(&a));
         Ok(a)
     }
-    pub fn direct_compile_fn(&mut self, i: &str) -> Result<IRSegment> {
+    pub fn direct_compile_fn(&mut self, i: &Ident) -> Result<IRSegment> {
         let (args, ast) = self
             .ctx
             .fn_ast_by_name(i)
@@ -113,8 +113,8 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
         &mut self,
         segment: &mut IRSegment,
         node: ASTNodeId,
-        expr: &'borrow AST<'source>,
-        frame: &mut Frame<'source>,
+        expr: &'borrow AST,
+        frame: &mut Frame<'borrow>,
     ) -> Result<Id> {
         let res = match expr.get_node(node)? {
             ASTNode::Val(v) => match v {
@@ -225,7 +225,7 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
                         ExpressionType::Var(i) => {
                             let ast = self
                                 .ctx
-                                .ident_ast_by_name(i.as_str())
+                                .ident_ast_by_name(i)
                                 .context("AST not present for existent ident expression")?;
                             let lhs = self.rec_build_ir(
                                 segment,
@@ -302,7 +302,7 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
                 match expr.get_node(*index)? {
                     //List filter
                     ASTNode::Comparison(rhs, comp, lhs) => {
-                        //TODO: assertions for all of this
+                        //TODO: assertions for all of thisshouldn't
 
                         let begin = segment.instructions.place(IROp::BeginBroadcast {
                             inner_type,
@@ -520,8 +520,8 @@ impl<'borrow, 'source> Frontend<'borrow, 'source> {
         segment: &mut IRSegment,
         _node: ASTNodeId,
         args: &ThinVec<ASTNodeId>,
-        expr: &'borrow AST<'source>,
-        frame: &mut Frame<'source>,
+        expr: &'borrow AST,
+        frame: &mut Frame<'borrow>,
     ) -> Result<Id> {
         let mut iter = args.iter();
         let Some(initial) = iter.next() else {

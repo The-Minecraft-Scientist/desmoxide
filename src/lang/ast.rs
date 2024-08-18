@@ -1,6 +1,7 @@
 use anyhow::{bail, Context, Result};
 //Re-export stuff from private scopes (used to keep enum name collisions down)
 
+use compact_str::CompactString;
 use debug_tree::{AsTree, TreeBuilder, TreeConfig, TreeSymbols};
 use strum::AsRefStr;
 
@@ -13,23 +14,21 @@ use std::{
 };
 use thin_vec::ThinVec;
 
-use crate::util::thin_str::ThinStr;
-
 #[derive(Debug, Clone, Copy)]
 pub struct ASTNodeId(NonZeroU32);
 
 #[derive(Clone, Debug, strum::AsRefStr)]
-pub enum ASTNode<'a> {
-    Val(Value<'a>),
+pub enum ASTNode {
+    Val(Value),
     Binary(ASTNodeId, ASTNodeId, BinaryOp),
     // Unary operations
     Unary(ASTNodeId, UnaryOp),
 
-    Parens(Ident<'a>, ASTNodeId), // Ambiguous case, either multiplication by juxtaposition or a function call
-    FunctionCall(Ident<'a>, ThinVec<ASTNodeId>), // Function with its list of arguments
-    Index(ASTNodeId, ASTNodeId),  // List indexing operations
+    Parens(Ident, ASTNodeId), // Ambiguous case, either multiplication by juxtaposition or a function call
+    FunctionCall(Ident, ThinVec<ASTNodeId>), // Function with its list of arguments
+    Index(ASTNodeId, ASTNodeId), // List indexing operations
 
-    List(List<'a>), //List
+    List(List), //List
 
     Point(ASTNodeId, ASTNodeId),
 
@@ -56,7 +55,7 @@ mod ast_impl {
 
     use super::{ASTNode as AN, ASTNodeId, BinaryOp as B, ListOp, Opcode as OP, UnaryOp as U};
 
-    impl<'a> AN<'a> {
+    impl AN {
         pub fn new_simple_with_node(token: Token, inner: ASTNodeId) -> Result<Self> {
             Ok(match token {
                 //trig
@@ -147,10 +146,10 @@ pub enum BinaryOp {
     Max,
 }
 #[derive(Debug, Clone)]
-pub enum List<'a> {
-    ListComp(ASTNodeId, ListCompInfo<'a>), // List defined by a list comphrehension inner member stored in the child node
-    Range(ASTNodeId, ASTNodeId),           // List defined by a range of values
-    List(ThinVec<ASTNodeId>),              // List defined by a vector of AST nodes
+pub enum List {
+    ListComp(ASTNodeId, ListCompInfo), // List defined by a list comphrehension inner member stored in the child node
+    Range(ASTNodeId, ASTNodeId),       // List defined by a range of values
+    List(ThinVec<ASTNodeId>),          // List defined by a vector of AST nodes
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, AsRefStr)]
@@ -169,8 +168,8 @@ pub enum Comparison {
 }
 
 #[derive(Debug, Clone)]
-pub struct ListCompInfo<'a> {
-    pub vars: ThinVec<(Ident<'a>, ASTNodeId)>,
+pub struct ListCompInfo {
+    pub vars: ThinVec<(Ident, ASTNodeId)>,
 }
 #[derive(Debug, Clone)]
 pub struct PiecewiseEntry {
@@ -179,12 +178,12 @@ pub struct PiecewiseEntry {
 }
 
 #[derive(Clone)]
-pub enum Value<'a> {
-    Ident(Ident<'a>),
+pub enum Value {
+    Ident(Ident),
     ConstantI64(i64),
     ConstantF64(f64),
 }
-impl<'a> Debug for Value<'a> {
+impl Debug for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Value::Ident(a) => a.0.fmt(f),
@@ -193,76 +192,76 @@ impl<'a> Debug for Value<'a> {
         }
     }
 }
-#[derive(Clone, Debug)]
-pub struct Ident<'a>(ThinStr<'a>);
-impl<'a> Ident<'a> {
-    pub fn as_str(&self) -> &'a str {
-        self.0.as_slice()
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct Ident(CompactString);
+impl Ident {
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
     }
 }
-impl<'a> Deref for Ident<'a> {
+impl Deref for Ident {
     type Target = str;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl From<i64> for Value<'_> {
+impl From<i64> for Value {
     fn from(value: i64) -> Self {
         Self::ConstantI64(value)
     }
 }
-impl From<f64> for Value<'_> {
+impl From<f64> for Value {
     fn from(value: f64) -> Self {
         Self::ConstantF64(value)
     }
 }
-impl<'a> From<&'a str> for Value<'a> {
-    fn from(value: &'a str) -> Self {
+impl From<&str> for Value {
+    fn from(value: &str) -> Self {
         Value::Ident(value.into())
     }
 }
-impl<'a> From<&'a str> for Ident<'a> {
-    fn from(value: &'a str) -> Self {
-        Ident(ThinStr::from_slice(value))
+impl From<&str> for Ident {
+    fn from(value: &str) -> Self {
+        Ident(value.into())
     }
 }
 #[derive(Clone)]
-pub struct AST<'source> {
-    pub store: Vec<ASTNode<'source>>,
+pub struct AST {
+    pub store: Vec<ASTNode>,
     pub root: Option<ASTNodeId>,
 }
-impl<'source> AST<'source> {
+impl AST {
     pub fn new() -> Self {
         Self {
             store: Vec::with_capacity(10),
             root: None,
         }
     }
-    pub fn place(&mut self, node: ASTNode<'source>) -> ASTNodeId {
+    pub fn place(&mut self, node: ASTNode) -> ASTNodeId {
         self.push(node);
         unsafe { ASTNodeId(NonZeroU32::new_unchecked(self.len() as u32)) }
     }
-    pub fn get_node(&self, idx: ASTNodeId) -> Result<&ASTNode<'source>> {
+    pub fn get_node(&self, idx: ASTNodeId) -> Result<&ASTNode> {
         self.get(idx.0.get() as usize - 1)
             .context("invalid AST node reference")
     }
-    pub fn get_node_mut(&mut self, idx: ASTNodeId) -> Result<&mut ASTNode<'source>> {
+    pub fn get_node_mut(&mut self, idx: ASTNodeId) -> Result<&mut ASTNode> {
         self.get_mut(idx.0.get() as usize - 1)
             .context("invalid AST node reference")
     }
-    pub fn place_root(&mut self, root: ASTNode<'source>) {
+    pub fn place_root(&mut self, root: ASTNode) {
         self.root = Some(self.place(root));
     }
     pub fn id_node_iter<'b>(
         &self,
     ) -> Map<
-        Zip<Iter<'_, ASTNode<'source>>, RangeFrom<u32>>,
-        for<'a> fn((&'a ASTNode<'source>, u32)) -> (ASTNodeId, &'a ASTNode<'source>),
+        Zip<Iter<'_, ASTNode>, RangeFrom<u32>>,
+        for<'a> fn((&'a ASTNode, u32)) -> (ASTNodeId, &'a ASTNode),
     > {
         self.iter().zip(0u32..).map(Self::map_tuple)
     }
-    fn map_tuple<'b>(t: (&'b ASTNode<'source>, u32)) -> (ASTNodeId, &'b ASTNode<'source>) {
+    fn map_tuple<'b>(t: (&'b ASTNode, u32)) -> (ASTNodeId, &'b ASTNode) {
         (
             ASTNodeId(unsafe { NonZeroU32::new_unchecked(t.1 + 1) }),
             t.0,
@@ -341,13 +340,13 @@ impl<'source> AST<'source> {
         Ok(())
     }
 }
-impl<'source> Index<ASTNodeId> for AST<'source> {
-    type Output = ASTNode<'source>;
+impl Index<ASTNodeId> for AST {
+    type Output = ASTNode;
     fn index(&self, index: ASTNodeId) -> &Self::Output {
         &self.store[index.0.get() as usize - 1]
     }
 }
-impl<'source> Debug for AST<'source> {
+impl<'source> Debug for AST {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("\n");
         let mut builder = TreeBuilder::new();
@@ -358,13 +357,13 @@ impl<'source> Debug for AST<'source> {
         Ok(())
     }
 }
-impl<'a> Deref for AST<'a> {
-    type Target = Vec<ASTNode<'a>>;
+impl Deref for AST {
+    type Target = Vec<ASTNode>;
     fn deref(&self) -> &Self::Target {
         &self.store
     }
 }
-impl<'a> DerefMut for AST<'a> {
+impl<'a> DerefMut for AST {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.store
     }

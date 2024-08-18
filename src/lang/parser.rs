@@ -17,7 +17,7 @@ use crate::{
 
 pub struct Parser<'source> {
     pub lexer: MultiPeek<LexIter<'source, Token>>,
-    pub ast: AST<'source>,
+    pub ast: AST,
 }
 impl<'a> Parser<'a> {
     pub fn new(lex: MultiPeek<LexIter<'a, Token>>) -> Self {
@@ -31,14 +31,14 @@ impl<'a> Parser<'a> {
         self.ast.place_root(root);
         Ok(())
     }
-    pub fn split(self) -> (AST<'a>, MultiPeek<LexIter<'a, Token>>) {
+    pub fn split(self) -> (AST, MultiPeek<LexIter<'a, Token>>) {
         (self.ast, self.lexer)
     }
 
-    fn place(&mut self, node: ASTNode<'a>) -> ASTNodeId {
+    fn place(&mut self, node: ASTNode) -> ASTNodeId {
         self.ast.place(node)
     }
-    fn parse_list_body(&mut self) -> Result<List<'a>> {
+    fn parse_list_body(&mut self) -> Result<List> {
         let next_token = self.lexer.peek_next().context("unexpected EOF")?;
         //Empty list
         if next_token.1 == Token::RBracket {
@@ -140,7 +140,7 @@ impl<'a> Parser<'a> {
         Ok(self.place(s))
     }
     //TODO: Sum/Product support, Derivative/integral support (in AST)
-    pub fn parse_expr(&mut self, min_binding_power: u8) -> Result<ASTNode<'a>> {
+    pub fn parse_expr(&mut self, min_binding_power: u8) -> Result<ASTNode> {
         //get LHS token
         let next = self.lexer.next_res()?;
 
@@ -353,7 +353,7 @@ impl<'a> Parser<'a> {
                 Token::For => {
                     self.lexer.discard()?;
                     //LHS is the expression to be run
-                    let mut vars: ThinVec<(Ident<'a>, ASTNodeId)> = ThinVec::with_capacity(2);
+                    let mut vars: ThinVec<(Ident, ASTNodeId)> = ThinVec::with_capacity(2);
                     loop {
                         let (id, Token::Ident) =
                             self.lexer.peek_next().context("unexpected EOF")?

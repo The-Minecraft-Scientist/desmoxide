@@ -1,8 +1,7 @@
 use crate::{
     graph::expressions::Expressions,
     interop::{Expression, GraphState},
-    lang::{compiler::frontend::Frontend, expression_provider::ExpressionId},
-    util::thin_str::ThinStr,
+    lang::{ast::Ident, compiler::frontend::Frontend, expression_provider::ExpressionId},
 };
 use std::{collections::HashMap, time::Instant};
 
@@ -11,7 +10,7 @@ fn test_parse_simplex_4d() {
     let _simplex = include_str!("../tests/simplex.json");
     let graph = serde_json::de::from_str(include_str!("../tests/simplex.json")).unwrap();
     let exprs = get_exprs(&graph);
-    parse_graph_exprs(&exprs);
+    parse_graph_exprs(exprs);
 }
 #[test]
 fn test_compile_simplex() {
@@ -21,21 +20,14 @@ fn test_compile_simplex() {
 fn test_compile_listmul() {
     test_compile_fn("tests/listmul.json", "g");
 }
-#[test]
-fn test_thin_str_soundness() {
-    let teststr = String::from_utf8(vec![b'a'; ThinStr::MAX_SLICE_LEN + 1]).unwrap();
-    dbg!(&teststr);
-    let s = ThinStr::from_slice(&teststr);
-    println!("{}", s);
-}
 
 fn test_compile_fn(path: &'static str, func: &'static str) {
     let graph = serde_json::de::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
     let exprs = get_exprs(&graph);
-    let p = parse_graph_exprs(&exprs);
+    let p = parse_graph_exprs(exprs);
     let mut f = Frontend::new(&p);
     let t = Instant::now();
-    let val = f.direct_compile_fn(func).unwrap();
+    let val = f.direct_compile_fn(&Ident::from(func)).unwrap();
     let after = Instant::now();
     val.instructions.debug_print(val.ret.unwrap());
     println!(
@@ -44,9 +36,7 @@ fn test_compile_fn(path: &'static str, func: &'static str) {
         val.instructions.len()
     );
 }
-pub fn parse_graph_exprs<'a, 'b: 'a>(
-    exprs: &'b HashMap<ExpressionId, &'a str>,
-) -> Expressions<'a, 'b> {
+pub fn parse_graph_exprs<'a>(exprs: HashMap<ExpressionId, &'a str>) -> Expressions<'a> {
     let mut p = Expressions::new(exprs);
     p.parse_all().unwrap();
     p
