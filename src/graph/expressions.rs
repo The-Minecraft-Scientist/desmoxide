@@ -1,5 +1,5 @@
 use std::{
-    borrow::BorrowMut,
+    borrow::{Borrow, BorrowMut},
     collections::{hash_map::Entry, HashMap},
     sync::Arc,
 };
@@ -32,8 +32,8 @@ pub struct FnId {
     pub t: IRType,
 }
 #[derive(Debug)]
-pub struct Expressions<'a> {
-    pub storage: HashMap<ExpressionId, &'a str>,
+pub struct Expressions {
+    pub storage: HashMap<ExpressionId, String>,
     pub meta: HashMap<ExpressionId, ExpressionMeta>,
     pub ident_lookup: HashMap<Ident, ExpressionId>,
 }
@@ -44,8 +44,8 @@ pub struct CompiledEquations {
     pub fn_cache: HashMap<(u32, Vec<IRType>), Arc<IRSegment>>,
 }
 
-impl<'a> Expressions<'a> {
-    pub fn new(lines: HashMap<ExpressionId, &'a str>) -> Self {
+impl Expressions {
+    pub fn new(lines: HashMap<ExpressionId, String>) -> Self {
         let len = lines.len();
         Self {
             meta: HashMap::with_capacity(len),
@@ -53,9 +53,10 @@ impl<'a> Expressions<'a> {
             ident_lookup: HashMap::with_capacity(len / 2),
         }
     }
-    pub fn line_lexer(&self, line: ExpressionId) -> Result<MultiPeek<LexIter<'a, Token>>> {
+    pub fn line_lexer(&self, line: ExpressionId) -> Result<MultiPeek<LexIter<'_, Token>>> {
         Ok(MultiPeek::new(LexIter::new(Token::lexer(
             self.storage
+                .borrow()
                 .get(&line)
                 .context(format!("line with ID {} not found!", *line))?,
         ))))
@@ -109,25 +110,28 @@ impl<'a> Expressions<'a> {
     pub fn scan_expression_type(
         &mut self,
         idx: ExpressionId,
-    ) -> Result<MultiPeek<LexIter<'_, Token>>> {
+    ) -> Result<(MultiPeek<LexIter<'_, Token>>, Option<Ident>, ExpressionMeta)> {
         let mut lexer = self.line_lexer(idx)?;
 
         let first = *lexer.multipeek_res()?;
+
+        let mut ident = None;
         let t = match first.1 {
             Token::Ident => match lexer.multipeek_res()?.1 {
                 //Function definition
                 Token::LParen => {
                     let mut argv: ThinVec<Ident> = ThinVec::with_capacity(3);
                     loop {
-                        match lexer.multipeek_res()? {
+                        match lexer.borrow_mut().multipeek_res()? {
                             (s, Token::Ident) => argv.push((*s).into()),
                             (_, Token::Comma) => {}
                             (_, Token::RParen) => {
-                                if lexer.multipeek().is_none() {
+                                if lexer.borrow_mut().multipeek().is_none() {
                                     break None;
                                 }
-                                lexer.catch_up();
-                                self.ident_lookup.insert(first.0.into(), idx.into());
+                                lexer.borrow_mut().catch_up();
+                                //              self.ident_lookup.insert(first.0.into(), idx.into());
+                                ident = Some(first.0.into());
                                 break Some(ExpressionType::Fn {
                                     name: first.0.into(),
                                     params: argv,
@@ -139,8 +143,8 @@ impl<'a> Expressions<'a> {
                 }
                 //[Ident]=[stuff]
                 Token::Eq => {
-                    lexer.catch_up();
-                    self.ident_lookup.borrow_mut().insert(first.0.into(), idx);
+                    lexer.borrow_mut().catch_up();
+                    ident = Some(first.0.into());
                     Some(ExpressionType::Var(first.0.into()))
                 }
                 _ => None,
@@ -178,8 +182,8 @@ impl<'a> Expressions<'a> {
                 });
             };
         }
-        self.meta.insert(idx, meta);
-        Ok(lexer)
+
+        Ok((lexer, ident, meta))
     }
     pub fn parse_all(&mut self) -> Result<()> {
         let keys = self.storage.keys().cloned().collect::<Vec<_>>();
@@ -189,7 +193,7 @@ impl<'a> Expressions<'a> {
         Ok(())
     }
     pub fn parse_expr(&mut self, idx: ExpressionId) -> Result<()> {
-        let mut lex = self.scan_expression_type(idx)?;
+        let (mut lex, ident, mut meta) = self.scan_expression_type(idx)?;
         let mut rhs = None;
         if let Some(_) = lex.peek_next() {
             let mut pm = Parser::new(lex);
@@ -197,15 +201,11 @@ impl<'a> Expressions<'a> {
             rhs = Some(pm.ast);
         }
         {
-            match self.meta.entry(idx) {
-                Entry::Occupied(mut v) => v.get_mut().latest_rhs_ast = rhs,
-                Entry::Vacant(a) => {
-                    let mut v = ExpressionMeta::INVALID;
-                    v.latest_rhs_ast = rhs;
-                    a.insert(v);
-                }
-            }
+            meta.latest_rhs_ast = rhs;
         }
+
+        self.meta.insert(idx, meta);
+        ident.map(|ident| self.ident_lookup.insert(ident, idx));
 
         Ok(())
     }
@@ -272,7 +272,7 @@ pub enum EquationType {
     InEq(Comparison),
 }
 
-impl<'a> ExpressionProvider for Expressions<'a> {
+impl ExpressionProvider for Expressions {
     fn get_ident_id(
         &self,
         ident: &Ident,

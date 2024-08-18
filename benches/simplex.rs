@@ -29,12 +29,12 @@ fn benchmark_parse(c: &mut Criterion) {
     });
 }
 
-pub fn parse_graph_exprs<'a>(exprs: HashMap<ExpressionId, &'a str>) -> Expressions<'a> {
+pub fn parse_graph_exprs(exprs: HashMap<ExpressionId, String>) -> Expressions {
     let mut p = Expressions::new(exprs);
     p.parse_all().unwrap();
     p
 }
-pub fn get_exprs<'a>(body: &'a GraphState) -> HashMap<ExpressionId, &'a str> {
+pub fn get_exprs(body: &GraphState) -> HashMap<ExpressionId, String> {
     let mut m = HashMap::with_capacity(50);
     for expr in body.expressions.list.iter().enumerate() {
         if let Expression::Expression {
@@ -44,7 +44,7 @@ pub fn get_exprs<'a>(body: &'a GraphState) -> HashMap<ExpressionId, &'a str> {
             other: _,
         } = expr.1
         {
-            m.insert(ExpressionId(*id), s.as_str());
+            m.insert(ExpressionId(*id), s.to_owned());
         }
     }
     m
