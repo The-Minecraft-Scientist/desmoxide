@@ -93,6 +93,7 @@ mod ast_impl {
                 OP::Add => AN::Binary(arg0, arg1, B::Add),
                 OP::Sub => AN::Binary(arg0, arg1, B::Sub),
                 OP::Mul => AN::Binary(arg0, arg1, B::Mul),
+                OP::None => AN::Binary(arg0, arg1, B::Mul),
                 OP::Div => AN::Binary(arg0, arg1, B::Div),
                 OP::Pow => AN::Binary(arg0, arg1, B::Pow),
                 t => bail!("{:?} not a binary operation", t),
@@ -377,6 +378,7 @@ pub enum Opcode {
     Neg,
     Div,
     Mul,
+    None,
     Pow,
     Mod,
     Index,
@@ -413,7 +415,7 @@ mod bp {
         pub fn infix_bp(&self) -> Result<InfixBP> {
             match self {
                 Add | Sub => Ok(InfixBP { left: 1, right: 2 }),
-                Div | Mul => Ok(InfixBP { left: 3, right: 4 }),
+                Div | Mul | None => Ok(InfixBP { left: 3, right: 4 }),
                 Pow => Ok(InfixBP { left: 5, right: 6 }),
                 t => bail!("bad op: {:?}", t),
             }

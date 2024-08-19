@@ -1,10 +1,10 @@
 #[macro_export]
 macro_rules! bad_token {
     ($s:expr, $t:expr) => {{
-        anyhow::bail!("bad token {:?} at {:?}", $t, $s.char_indices())
+        anyhow::bail!("bad token {:?} at {:?}", $t, $s)
     }};
     ($s:expr, $t:expr, $msg:expr) => {{
-        anyhow::bail!("bad token {:?} at {:?}: {}", $t, $s.char_indices(), $msg)
+        anyhow::bail!("bad token {:?} at {:?}: {}", $t, $s, $msg)
     }};
 }
 #[macro_export]

@@ -10,7 +10,7 @@ pub enum Token {
     FloatLit(f64),
     ///Integer literal
 
-    #[regex(r"-?\d+", |lex| {lex.slice().parse().ok()})]
+    #[regex(r"\d+", |lex| {lex.slice().parse().ok()})]
     IntegerLit(i64),
 
     // IDENTIFIERS -----------------------------------------

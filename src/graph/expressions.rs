@@ -170,7 +170,6 @@ impl Expressions {
         idx: ExpressionId,
     ) -> Result<(MultiPeek<LexIter<'_, Token>>, Option<Ident>, ExpressionMeta)> {
         let mut lexer = self.line_lexer(idx)?;
-
         let first = *lexer.multipeek_res()?;
 
         let mut ident = None;
@@ -214,9 +213,11 @@ impl Expressions {
         } else {
             //Default case, equation
             let mut pm = Parser::new(lexer);
+
             pm.parse()?;
 
             let (ast, lex) = pm.split();
+
             lexer = lex;
             let next = lexer.next_res();
             if let Ok(n) = next {
@@ -252,7 +253,7 @@ impl Expressions {
                     ident.map(|ident| self.ident_lookup.insert(ident, i));
                 }
                 Err(e) => {
-                    errors.insert(i, e.backtrace().to_string());
+                    errors.insert(i, e.to_string());
                 }
             }
         }

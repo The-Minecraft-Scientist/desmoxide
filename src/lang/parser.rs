@@ -28,6 +28,7 @@ impl<'a> Parser<'a> {
     }
     pub fn parse(&mut self) -> Result<()> {
         let root = self.parse_expr(0)?;
+
         self.ast.place_root(root);
         Ok(())
     }
@@ -289,7 +290,7 @@ impl<'a> Parser<'a> {
                 let arg = self.parse_function_call()?;
                 ASTNode::new_list_fn(t, arg)?
             }
-            t => bad_token!(next.0, t, "getting lhs"),
+            t => bad_token!(next.0, self.lexer.idx, "getting lhs"),
         };
 
         //Loop across this level
@@ -378,8 +379,7 @@ impl<'a> Parser<'a> {
                 }
                 _t => {
                     //This is super jank but we unconditionally pop the self.lexer every iteration so...
-                    self.lexer.push((&"*", Token::Mul));
-                    Opcode::Mul
+                    Opcode::None
                 }
             };
             if let Ok(bp) = op.postfix_bp() {
@@ -448,7 +448,9 @@ impl<'a> Parser<'a> {
                 if bp.left < min_binding_power {
                     break;
                 }
-                let _ = self.lexer.next();
+                if op != Opcode::None {
+                    self.lexer.next();
+                }
                 let rhs = self.parse_expr(bp.right)?;
 
                 lhs = ASTNode::new_simple_binary(op, self.place(lhs), self.place(rhs))?;
