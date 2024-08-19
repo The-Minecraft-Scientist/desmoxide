@@ -92,12 +92,12 @@ pub enum EvalError {
 
 pub fn eval(bytecode: &IRSegment, args: Vec<IRValue>) -> Result<IRValue, EvalError> {
     let mut vals = ValStorage::new();
-    let mut iter = bytecode.instructions.iter().cloned().peekable();
-    while let Some(op) = iter.next() {
+    let mut iter = bytecode.instructions.iter().cloned().enumerate().peekable();
+    while let Some((id, op)) = iter.next() {
         if let IROp::Ret(id) = op {
             return vals.get(id).cloned();
-        } else if let Some(id) = bytecode.ret {
-            return vals.get(id).cloned();
+        } else if bytecode.ret.map(|i| i.idx()) == Some(id as u32) {
+            return vals.get(bytecode.ret.unwrap()).cloned();
         }
         let val = execute_instruction(op, &bytecode, &mut iter, &mut vals, &args)?;
         vals.push(val)
