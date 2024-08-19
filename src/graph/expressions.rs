@@ -61,11 +61,15 @@ impl Expressions {
 
     pub fn set_equation(&mut self, id: ExpressionId, eq: String) {
         self.storage.insert(id, eq);
+
+        self.parse_all();
     }
 
     pub fn add_equation(&mut self, eq: String) {
         self.storage.insert(ExpressionId(self.max_id), eq);
         self.max_id += 1;
+
+        self.parse_all();
     }
 
     pub fn line_lexer(&self, line: ExpressionId) -> Result<MultiPeek<LexIter<'_, Token>>> {
