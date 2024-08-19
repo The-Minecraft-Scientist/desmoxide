@@ -96,6 +96,8 @@ pub fn eval(bytecode: &IRSegment, args: Vec<IRValue>) -> Result<IRValue, EvalErr
     while let Some(op) = iter.next() {
         if let IROp::Ret(id) = op {
             return vals.get(id).cloned();
+        } else if let Some(id) = bytecode.ret {
+            return vals.get(id).cloned();
         }
         let val = execute_instruction(op, &bytecode, &mut iter, &mut vals, &args)?;
         vals.push(val)

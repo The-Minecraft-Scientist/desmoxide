@@ -249,7 +249,7 @@ impl Expressions {
                     ident.map(|ident| self.ident_lookup.insert(ident, i));
                 }
                 Err(e) => {
-                    errors.insert(i, e.to_string() + &self.storage[&i]);
+                    errors.insert(i, e.to_string());
                 }
             }
         }
@@ -260,7 +260,6 @@ impl Expressions {
         let mut rhs = None;
         if let Some(_) = lex.peek_next() {
             let mut pm = Parser::new(lex);
-            println!("hi");
             pm.parse()?;
             rhs = Some(pm.ast);
         }
