@@ -255,7 +255,7 @@ impl Expressions {
                     ident.map(|ident| self.ident_lookup.insert(ident, i));
                 }
                 Err(e) => {
-                    self.errors.insert(i, e.to_string());
+                    self.errors.insert(i, e.to_string() + &self.storage[&i]);
                 }
             }
         }
