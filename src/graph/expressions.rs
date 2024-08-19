@@ -34,6 +34,7 @@ pub struct FnId {
 #[derive(Debug)]
 pub struct Expressions {
     pub storage: HashMap<ExpressionId, String>,
+    pub max_id: u32,
     pub meta: HashMap<ExpressionId, ExpressionMeta>,
     pub ident_lookup: HashMap<Ident, ExpressionId>,
     pub errors: HashMap<ExpressionId, String>,
@@ -52,12 +53,20 @@ impl Expressions {
         Self {
             errors: HashMap::new(),
             meta: HashMap::with_capacity(len),
+            max_id: 0,
             storage: lines,
             ident_lookup: HashMap::with_capacity(len / 2),
         }
     }
 
-    pub fn set_equation(&mut self) {}
+    pub fn set_equation(&mut self, id: ExpressionId, eq: String) {
+        self.storage.insert(id, eq);
+    }
+
+    pub fn add_equation(&mut self, eq: String) {
+        self.storage.insert(ExpressionId(self.max_id), eq);
+        self.max_id += 1;
+    }
 
     pub fn line_lexer(&self, line: ExpressionId) -> Result<MultiPeek<LexIter<'_, Token>>> {
         Ok(MultiPeek::new(LexIter::new(Token::lexer(
