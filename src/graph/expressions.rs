@@ -185,7 +185,6 @@ impl Expressions {
                                     break None;
                                 }
                                 lexer.borrow_mut().catch_up();
-                                //              self.ident_lookup.insert(first.0.into(), idx.into());
                                 ident = Some(first.0.into());
                                 break Some(ExpressionType::Fn {
                                     name: first.0.into(),
@@ -261,6 +260,7 @@ impl Expressions {
         let mut rhs = None;
         if let Some(_) = lex.peek_next() {
             let mut pm = Parser::new(lex);
+            println!("hi");
             pm.parse()?;
             rhs = Some(pm.ast);
         }
