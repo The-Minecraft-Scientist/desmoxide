@@ -175,9 +175,9 @@ impl Expressions {
 
         let mut ident = None;
         let t = match first.1 {
-            Token::Ident => match lexer.multipeek_res()?.1 {
+            Token::Ident => match lexer.multipeek_res() {
                 //Function definition
-                Token::LParen => {
+                Ok((_, Token::LParen)) => {
                     let mut argv: ThinVec<Ident> = ThinVec::with_capacity(3);
                     loop {
                         match lexer.borrow_mut().multipeek_res()? {
@@ -199,7 +199,7 @@ impl Expressions {
                     }
                 }
                 //[Ident]=[stuff]
-                Token::Eq => {
+                Ok((_, Token::Eq)) => {
                     lexer.borrow_mut().catch_up();
                     ident = Some(first.0.into());
                     Some(ExpressionType::Var(first.0.into()))
@@ -252,7 +252,7 @@ impl Expressions {
                     ident.map(|ident| self.ident_lookup.insert(ident, i));
                 }
                 Err(e) => {
-                    errors.insert(i, e.to_string());
+                    errors.insert(i, e.backtrace().to_string());
                 }
             }
         }

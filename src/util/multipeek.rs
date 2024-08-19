@@ -27,7 +27,7 @@ impl<T: Iterator + Sized> MultiPeek<T> {
         self.buffer.last().unwrap()
     }
     pub fn multipeek_res(&mut self) -> Result<&T::Item> {
-        self.multipeek().as_ref().context("unexpected EOF")
+        self.multipeek().as_ref().context("unexpected EOF, ")
     }
     pub fn catch_up(&mut self) {
         self.buffer.clear();
@@ -61,8 +61,10 @@ impl<T: Iterator> Iterator for MultiPeek<T> {
     type Item = <T as Iterator>::Item;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(next) = self.buffer.pop() {
-            return next;
+        while let Some(next) = self.buffer.pop() {
+            if next.is_some() {
+                return next;
+            }
         }
         self.iter.next()
     }
