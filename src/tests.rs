@@ -38,7 +38,12 @@ fn test_compile_fn(path: &'static str, func: &'static str) {
 }
 pub fn parse_graph_exprs(exprs: HashMap<ExpressionId, String>) -> Expressions {
     let mut p = Expressions::new(exprs);
-    p.parse_all().unwrap();
+    let errors = p.parse_all();
+    for (_, err) in &errors {
+        eprintln!("{}", err);
+    }
+    assert!(errors.is_empty());
+
     p
 }
 pub fn get_exprs(body: &GraphState) -> HashMap<ExpressionId, String> {

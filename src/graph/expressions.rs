@@ -37,7 +37,6 @@ pub struct Expressions {
     pub max_id: u32,
     pub meta: HashMap<ExpressionId, ExpressionMeta>,
     pub ident_lookup: HashMap<Ident, ExpressionId>,
-    pub errors: HashMap<ExpressionId, String>,
 }
 
 #[derive(Debug)]
@@ -51,7 +50,6 @@ impl Expressions {
     pub fn new(lines: HashMap<ExpressionId, String>) -> Self {
         let len = lines.len();
         Self {
-            errors: HashMap::new(),
             meta: HashMap::with_capacity(len),
             max_id: 0,
             storage: lines,
@@ -61,15 +59,11 @@ impl Expressions {
 
     pub fn set_equation(&mut self, id: ExpressionId, eq: String) {
         self.storage.insert(id, eq);
-
-        self.parse_all();
     }
 
     pub fn add_equation(&mut self, eq: String) {
         self.storage.insert(ExpressionId(self.max_id), eq);
         self.max_id += 1;
-
-        self.parse_all();
     }
 
     pub fn line_lexer(&self, line: ExpressionId) -> Result<MultiPeek<LexIter<'_, Token>>> {
@@ -246,8 +240,9 @@ impl Expressions {
 
         Ok((lexer, ident, meta))
     }
-    pub fn parse_all(&mut self) -> Result<()> {
+    pub fn parse_all(&mut self) -> HashMap<ExpressionId, String> {
         let keys = self.storage.keys().cloned().collect::<Vec<_>>();
+        let mut errors = HashMap::new();
         for i in keys {
             match self.parse_expr(i) {
                 Ok((ident, meta)) => {
@@ -255,11 +250,11 @@ impl Expressions {
                     ident.map(|ident| self.ident_lookup.insert(ident, i));
                 }
                 Err(e) => {
-                    self.errors.insert(i, e.to_string() + &self.storage[&i]);
+                    errors.insert(i, e.to_string() + &self.storage[&i]);
                 }
             }
         }
-        Ok(())
+        errors
     }
     pub fn parse_expr(&mut self, idx: ExpressionId) -> Result<(Option<Ident>, ExpressionMeta)> {
         let (mut lex, ident, mut meta) = self.scan_expression_type(idx)?;

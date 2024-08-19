@@ -25,13 +25,23 @@ fn benchmark_parse(c: &mut Criterion) {
         serde_json::de::from_str(&std::fs::read_to_string("tests/simplex.json").unwrap()).unwrap();
     let exprs = get_exprs(&graph);
     c.bench_function("simplex parse", |b| {
-        b.iter_with_large_drop(|| Expressions::new(exprs.clone()).parse_all().unwrap())
+        b.iter_with_large_drop(|| {
+            let errors = Expressions::new(exprs.clone()).parse_all();
+            for (_, err) in &errors {
+                eprintln!("{}", err);
+            }
+            assert!(errors.is_empty());
+        })
     });
 }
 
 pub fn parse_graph_exprs(exprs: HashMap<ExpressionId, String>) -> Expressions {
     let mut p = Expressions::new(exprs);
-    p.parse_all().unwrap();
+    let errors = p.parse_all();
+    for (_, err) in &errors {
+        eprintln!("{}", err);
+    }
+    assert!(errors.is_empty());
     p
 }
 pub fn get_exprs(body: &GraphState) -> HashMap<ExpressionId, String> {
