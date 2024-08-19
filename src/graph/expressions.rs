@@ -39,10 +39,10 @@ pub struct Expressions {
     pub ident_lookup: HashMap<Ident, ExpressionId>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct CompiledEquations {
     pub compiled_equations:
-        HashMap<ExpressionId, Result<(Option<IRSegment>, Option<IRSegment>, EquationType)>>,
+        HashMap<ExpressionId, (Option<IRSegment>, Option<IRSegment>, EquationType)>,
     pub fn_cache: HashMap<(u32, Vec<IRType>), Arc<IRSegment>>,
 }
 
@@ -75,7 +75,7 @@ impl Expressions {
         ))))
     }
 
-    pub fn compile_all(&self) -> CompiledEquations {
+    pub fn compile_all(&self, errors: &mut HashMap<ExpressionId, String>) -> CompiledEquations {
         let mut frontend = Frontend::new(self);
         CompiledEquations {
             compiled_equations: self
@@ -85,7 +85,7 @@ impl Expressions {
                     (
                         k.clone(),
                         (|| {
-                            Ok(match meta.expression_type {
+                            Ok::<_, anyhow::Error>(match meta.expression_type {
                                 Some(ExpressionType::Eq { eq_type }) => {
                                     let lhs = meta
                                         .latest_lhs_ast
@@ -108,9 +108,12 @@ impl Expressions {
                         })(),
                     )
                 })
-                .filter_map(|(k, eq)| match eq.transpose() {
-                    Some(eq) => Some((k, eq)),
-                    None => None,
+                .filter_map(|(k, eq)| match eq {
+                    Ok(eq) => eq.map(|eq| (k, eq)),
+                    Err(err) => {
+                        errors.insert(k, err.to_string());
+                        None
+                    }
                 })
                 .collect(),
             fn_cache: frontend.fn_cache,

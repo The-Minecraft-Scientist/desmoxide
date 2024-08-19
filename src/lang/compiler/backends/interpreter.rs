@@ -33,7 +33,7 @@ impl ValStorage {
     pub fn get(&self, id: Id) -> Result<&IRValue, EvalError> {
         self.vals
             .get(id.idx() as usize)
-            .ok_or_else(|| EvalError::InstructionNotExecuted(id.idx()))
+            .ok_or_else(|| EvalError::InstructionNotExecuted(id))
     }
 
     pub fn get_typechecked(&self, id: Id, expected: IRType) -> Result<&IRValue, EvalError> {
@@ -76,8 +76,8 @@ impl fmt::Display for TypeError {
 
 #[derive(Debug, Error)]
 pub enum EvalError {
-    #[error("Instruction {0} wasnt yet executed")]
-    InstructionNotExecuted(u32),
+    #[error("Instruction {0:?} wasnt yet executed")]
+    InstructionNotExecuted(Id),
     #[error("Bytecode doesnt not contain return instruction")]
     NoReturn,
     #[error("Missing value at instruction: {0}")]
@@ -97,11 +97,14 @@ pub fn eval(bytecode: &IRSegment, args: Vec<IRValue>) -> Result<IRValue, EvalErr
     while let Some(op) = iter.next() {
         if let IROp::Ret(id) = op {
             return vals.get(id).cloned();
-        } else if bytecode.ret.map(|i| i.idx()) == Some(vals.vals.len() as u32 - 1) {
-            return vals.get(bytecode.ret.unwrap()).cloned();
         }
         let val = execute_instruction(op, &bytecode, &mut iter, &mut vals, &args)?;
+
+        if bytecode.ret.map(|i| i.idx()) == Some(vals.vals.len() as u32) {
+            return Ok(val);
+        }
         vals.push(val);
+
         id += 1;
     }
 
