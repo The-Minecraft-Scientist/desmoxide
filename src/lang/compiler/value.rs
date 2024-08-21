@@ -128,14 +128,18 @@ macro_rules! impl_op {
                         } else if result.is_infinite() {
                             Number::Fraction(Ratio::new(result.signum() as i64 * 1, 0))
                         } else {
-                            Number::Double(result)
+                            result.into()
                         }
                     }
 
                     (Number::Fraction(lhs), Number::Fraction(rhs)) => {
-                        let result = lhs.$method(rhs);
+                        if *rhs.denom() == 0 {
+                            Number::Undefined
+                        } else {
+                            let result = lhs.$method(rhs);
 
-                        Number::Fraction(result)
+                            result.into()
+                        }
                     }
 
                     (Number::Fraction(lhs), Number::Double(rhs)) => {
@@ -145,7 +149,7 @@ macro_rules! impl_op {
                         } else if result.is_infinite() {
                             Number::Fraction(Ratio::new(result.signum() as i64 * 1, 0))
                         } else {
-                            Number::Double(result)
+                            result.into()
                         }
                     }
 
@@ -156,7 +160,7 @@ macro_rules! impl_op {
                         } else if result.is_infinite() {
                             Number::Fraction(Ratio::new(result.signum() as i64 * 1, 0))
                         } else {
-                            Number::Double(result)
+                            result.into()
                         }
                     }
 
@@ -173,9 +177,13 @@ macro_rules! impl_op {
                     (Number::Double(lhs), Number::Double(rhs)) => lhs.$method(rhs).into(),
 
                     (Number::Fraction(lhs), Number::Fraction(rhs)) => {
-                        let result = lhs.$method(rhs);
+                        if *rhs.numer() == 0 {
+                            Number::Undefined
+                        } else {
+                            let result = lhs.$method(rhs);
 
-                        Number::Fraction(result)
+                            Number::Fraction(result)
+                        }
                     }
 
                     (Number::Fraction(lhs), Number::Double(rhs)) => {
