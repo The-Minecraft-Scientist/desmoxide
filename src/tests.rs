@@ -29,7 +29,7 @@ fn test_compile_fn(path: &'static str, func: &'static str) {
     let t = Instant::now();
     let val = f.direct_compile_fn(&Ident::from(func)).unwrap();
     let after = Instant::now();
-    val.instructions.debug_print(val.ret.unwrap());
+    val.instructions.debug_print(val.ret);
     println!(
         "done in {:?} microseconds, compiled to {:?} instructions",
         after.checked_duration_since(t).unwrap().as_micros(),

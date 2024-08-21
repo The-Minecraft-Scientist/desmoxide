@@ -50,7 +50,7 @@ impl<'borrow> Frontend<'borrow> {
             expr,
             &mut frame,
         )?;
-        segment.ret = Some(ret_id);
+        segment.ret = ret_id;
         Ok(segment)
     }
     fn compile_fn(
@@ -78,7 +78,7 @@ impl<'borrow> Frontend<'borrow> {
             &mut frame,
         )?;
         frame.pop_scope();
-        segment.ret = Some(ret_id);
+        segment.ret = ret_id;
         Ok(segment)
     }
     pub fn invalidate_cache(&mut self) {

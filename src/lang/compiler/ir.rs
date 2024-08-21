@@ -19,7 +19,7 @@ pub struct IRSegment {
     pub args: Vec<IRType>,
     pub dependencies: HashMap<FunctionId, Arc<Self>>,
     pub instructions: IRInstructionSeq,
-    pub ret: Option<Id>,
+    pub ret: Id,
 }
 impl IRSegment {
     pub fn new(args: Vec<IRType>) -> Self {
@@ -27,12 +27,12 @@ impl IRSegment {
             args,
             dependencies: HashMap::new(),
             instructions: IRInstructionSeq::new(),
-            ret: None,
+            ret: Id::new(0, IRType::Never),
         }
     }
     pub fn push_dependency(&mut self, dep: Arc<Self>, expr: ExpressionId) -> FunctionId {
         // we have bigger problems if a function has > u32::MAX deps
-        let id = FunctionId(Id::new(*expr, dep.ret.unwrap().t()));
+        let id = FunctionId(Id::new(*expr, dep.ret.t()));
         match self.dependencies.entry(id) {
             std::collections::hash_map::Entry::Occupied(o) => {
                 return *o.key();
@@ -271,8 +271,6 @@ pub enum IROp {
     FnCall(FunctionId),
     /// Define an argument to be passed into a function call
     FnArg(Id),
-    /// Return the value stored in this register
-    Ret(Id),
 }
 impl IROp {
     pub fn type_of(&self) -> IRType {
@@ -287,9 +285,7 @@ impl IROp {
             //Passthrough types
             IROp::LoadBroadcastArg(BroadcastArg { t, .. }) | IROp::LoadArg(ArgId { t, .. }) => *t,
 
-            IROp::FnCall(FunctionId(id)) | IROp::BeginPiecewise { res: id, .. } | IROp::Ret(id) => {
-                id.t()
-            }
+            IROp::FnCall(FunctionId(id)) | IROp::BeginPiecewise { res: id, .. } => id.t(),
             //Opaque types
             IROp::Vec2(..) => IRType::Vec2,
             IROp::Vec3(..) => IRType::Vec3,
@@ -562,7 +558,6 @@ impl IRInstructionSeq {
                 }
                 b
             }
-            IROp::Ret(id) => named_branch!(n, "", id),
             _ => unreachable!(),
         };
         Ok(())

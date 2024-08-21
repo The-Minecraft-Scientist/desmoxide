@@ -95,12 +95,9 @@ pub fn eval(bytecode: &IRSegment, args: Vec<IRValue>) -> Result<IRValue, EvalErr
     let mut iter = bytecode.instructions.iter().cloned().peekable();
     let mut id = 0;
     while let Some(op) = iter.next() {
-        if let IROp::Ret(id) = op {
-            return vals.get(id).cloned();
-        }
         let val = execute_instruction(op, &bytecode, &mut iter, &mut vals, &args)?;
 
-        if bytecode.ret.map(|i| i.idx()) == Some(vals.vals.len() as u32) {
+        if bytecode.ret.idx() == vals.vals.len() as u32 {
             return Ok(val);
         }
         vals.push(val);
@@ -303,7 +300,6 @@ fn execute_instruction(
                 }))
             }
         },
-        IROp::Ret(_) => unreachable!("Should have executed return before"),
         _ => todo!(),
     })
 }
@@ -326,7 +322,7 @@ mod tests {
 
         macro_rules! parameterized_tests{
 
-            ($($name:ident: {ir: $ir:expr, args: $args:expr, expected: $expected:expr},)*) => {
+            ($($name:ident: {ir: $ir:expr, args: $args:expr, expected: $expected:expr, ret: $ret:expr})*) => {
              $(
                 #[test]
                 fn $name() {
@@ -335,7 +331,7 @@ mod tests {
                         args: args.iter().map(|arg| arg.ir_type()).collect(),
                         dependencies: HashMap::new(),
                         instructions: $ir.into(),
-                        ret: None
+                        ret: $ret
                     };
                     let results = eval(&segment, args).unwrap();
                     assert_eq!(results, $expected);
@@ -345,19 +341,22 @@ mod tests {
         }
 
         parameterized_tests! {
-            test_add: {ir: vec![IROp::Const(1.0),
-                          IROp::Binary(Id::new(0, IRType::Number), Id::new(0, IRType::Number), BinaryOp::Add),
-                          IROp::Ret(Id::new(1, IRType::Number))],
-                          args: vec![],
-                          expected: IRValue::Number(2.0.into())},
-
-            test_args: {ir: vec![IROp::Const(1.0),
-                          IROp::LoadArg(ArgId{
-                              idx: 0,
-                              t: IRType::Number
-                          }),
-                          IROp::Binary(Id::new(0, IRType::Number), Id::new(1, IRType::Number), BinaryOp::Add),
-                          IROp::Ret(Id::new(2, IRType::Number))], args: vec![IRValue::Number(2.0.into())], expected: IRValue::Number(3.0.into())},
+                test_add: {ir: vec![IROp::Const(1.0),
+                              IROp::Binary(Id::new(0, IRType::Number), Id::new(0, IRType::Number), BinaryOp::Add),],
+                              args: vec![],
+                              expected: IRValue::Number(2.0.into()),
+                              ret: Id::new(1, IRType::Number)
+                }
+                test_args: {ir: vec![IROp::Const(1.0),
+                              IROp::LoadArg(ArgId{
+                                  idx: 0,
+                                  t: IRType::Number
+                              }),
+                              IROp::Binary(Id::new(0, IRType::Number),Id::new(1, IRType::Number), BinaryOp::Add),
+                             ],
+                              args: vec![IRValue::Number(2.0.into())], expected: IRValue::Number(3.0.into()),
+                              ret: Id::new(2, IRType::Number)
+                }
         }
     }
 }

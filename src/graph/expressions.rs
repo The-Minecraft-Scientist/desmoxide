@@ -244,6 +244,7 @@ impl Expressions {
         Ok((lexer, ident, meta))
     }
     pub fn parse_all(&mut self) -> HashMap<ExpressionId, String> {
+        self.meta.clear();
         let keys = self.storage.keys().cloned().collect::<Vec<_>>();
         let mut errors = HashMap::new();
         for i in keys {

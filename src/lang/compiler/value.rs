@@ -71,6 +71,26 @@ impl Number {
     }
 }
 
+impl Into<f64> for Number {
+    fn into(self) -> f64 {
+        match self {
+            Number::Double(y) => y,
+            Number::Fraction(y) => y.to_f64().unwrap(),
+            Number::Undefined => f64::NAN,
+        }
+    }
+}
+
+impl Into<f32> for Number {
+    fn into(self) -> f32 {
+        match self {
+            Number::Double(y) => y as f32,
+            Number::Fraction(y) => y.to_f32().unwrap(),
+            Number::Undefined => f32::NAN,
+        }
+    }
+}
+
 impl From<f64> for Number {
     fn from(value: f64) -> Self {
         if value.is_nan() {
