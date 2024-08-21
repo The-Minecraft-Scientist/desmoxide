@@ -18,10 +18,12 @@ use crate::lang::{
         ir::{IRSegment, IRType},
         value::IRValue,
     },
-    expression_provider::{ExpressionId, ExpressionProvider},
     lexer::Token,
     parser::Parser,
 };
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Shrinkwrap)]
+pub struct ExpressionId(pub u32);
 use crate::{
     bad_token,
     util::{multipeek::MultiPeek, LexIter},
@@ -41,8 +43,7 @@ pub struct Expressions {
 
 #[derive(Debug, Default)]
 pub struct CompiledEquations {
-    pub compiled_equations:
-        HashMap<ExpressionId, (Option<IRSegment>, Option<IRSegment>, EquationType)>,
+    pub compiled_equations: HashMap<ExpressionId, CompiledEquation>,
     pub fn_cache: HashMap<(u32, Vec<IRType>), Arc<IRSegment>>,
 }
 
@@ -76,7 +77,7 @@ impl Expressions {
     }
 
     pub fn compile_all(&self, errors: &mut HashMap<ExpressionId, String>) -> CompiledEquations {
-        let mut frontend = Frontend::new(self);
+        let mut frontend = Frontend::new(&self.meta, &self.ident_lookup);
         CompiledEquations {
             compiled_equations: self
                 .meta
@@ -85,26 +86,30 @@ impl Expressions {
                     (
                         k.clone(),
                         (|| {
-                            Ok::<_, anyhow::Error>(match meta.expression_type {
-                                Some(ExpressionType::Eq { eq_type }) => {
-                                    let lhs = meta
-                                        .latest_lhs_ast
-                                        .as_ref()
-                                        .map(|ast| frontend.compile_expr(&ast))
-                                        .transpose()?;
-
-                                    let rhs = meta
-                                        .latest_lhs_ast
-                                        .as_ref()
-                                        .map(|ast| frontend.compile_expr(&ast))
-                                        .transpose()?;
-
-                                    Some((lhs, rhs, eq_type))
+                            let compiled = match meta {
+                                ExpressionMeta::Eq(eq) => Some(match eq {
+                                    Equation::Implicit { lhs } => CompiledEquation::Implicit {
+                                        lhs: frontend.compile_expr(lhs)?,
+                                    },
+                                    Equation::Explicit { lhs, rhs, comp } => {
+                                        CompiledEquation::Explicit {
+                                            lhs: frontend.compile_expr(lhs)?,
+                                            rhs: frontend.compile_expr(rhs)?,
+                                            comp: *comp,
+                                        }
+                                    }
+                                }),
+                                ExpressionMeta::Fn { name, params, rhs } => {
+                                    let lhs = frontend.compile_expr(rhs)?;
+                                    if lhs.ret.t() == IRType::Number {
+                                        Some(CompiledEquation::Implicit { lhs })
+                                    } else {
+                                        None
+                                    }
                                 }
-                                Some(ExpressionType::Fn { .. }) => None,
-                                Some(ExpressionType::Var(..)) => None,
-                                None => None,
-                            })
+                                ExpressionMeta::Var { ident, rhs } => None,
+                            };
+                            Ok::<_, anyhow::Error>(compiled)
                         })(),
                     )
                 })
@@ -124,56 +129,71 @@ impl Expressions {
         &self,
         eqs: &mut CompiledEquations,
         idx: ExpressionId,
-    ) -> Result<Option<(Option<IRSegment>, Option<IRSegment>, EquationType)>> {
+    ) -> Result<Option<CompiledEquation>> {
         let meta = self.meta.get(&idx).context("failed to get line")?;
         // TODO: REMOVE CLONE
         let mut frontend = Frontend {
-            ctx: self,
+            exprs: &self.meta,
+            idents: &self.ident_lookup,
             fn_cache: eqs.fn_cache.clone(),
         };
-        let compiled = match meta.expression_type {
-            Some(ExpressionType::Eq { eq_type }) => {
-                let lhs = meta
-                    .latest_lhs_ast
-                    .as_ref()
-                    .map(|ast| frontend.compile_expr(&ast))
-                    .transpose()?;
 
-                let rhs = meta
-                    .latest_lhs_ast
-                    .as_ref()
-                    .map(|ast| frontend.compile_expr(&ast))
-                    .transpose()?;
-
-                Some((lhs, rhs, eq_type))
+        let compiled = match meta {
+            ExpressionMeta::Eq(eq) => Some(match eq {
+                Equation::Implicit { lhs } => CompiledEquation::Implicit {
+                    lhs: frontend.compile_expr(lhs)?,
+                },
+                Equation::Explicit { lhs, rhs, comp } => CompiledEquation::Explicit {
+                    lhs: frontend.compile_expr(lhs)?,
+                    rhs: frontend.compile_expr(rhs)?,
+                    comp: *comp,
+                },
+            }),
+            ExpressionMeta::Fn { name, params, rhs } => {
+                let lhs = frontend.compile_expr(rhs)?;
+                if lhs.ret.t() == IRType::Number {
+                    Some(CompiledEquation::Implicit { lhs })
+                } else {
+                    None
+                }
             }
-            Some(ExpressionType::Fn { .. }) => None,
-            Some(ExpressionType::Var(..)) => None,
-            None => None,
+            ExpressionMeta::Var { ident, rhs } => None,
         };
 
         Ok(compiled)
     }
 
-    pub(crate) fn cache_compiled_fn(&self, idx: u32, t: IRType, ir: IRSegment) -> Result<()> {
-        self.meta
-            .get(&idx)
-            .context("could not get metadata of line")?
-            .compiled_versions
-            .borrow_mut()
-            .get_or_insert(HashMap::with_capacity(1))
-            .insert(t, ir);
-        Ok(())
+    pub fn parse_all(&mut self) -> HashMap<ExpressionId, String> {
+        let keys = self.storage.keys().cloned().collect::<Vec<_>>();
+        let mut errors = HashMap::new();
+        for i in keys {
+            match self.parse_expr(i) {
+                Ok(meta) => {
+                    match &meta {
+                        ExpressionMeta::Var { ident, .. } => {
+                            self.ident_lookup.insert(ident.clone(), i);
+                        }
+                        ExpressionMeta::Fn { name, params, rhs } => {
+                            self.ident_lookup.insert(name.clone(), i);
+                        }
+                        _ => (),
+                    }
+
+                    self.meta.insert(i, meta);
+                }
+                Err(e) => {
+                    errors.insert(i, e.to_string());
+                }
+            }
+        }
+        errors
     }
-    pub fn scan_expression_type(
-        &mut self,
-        idx: ExpressionId,
-    ) -> Result<(MultiPeek<LexIter<'_, Token>>, Option<Ident>, ExpressionMeta)> {
+
+    pub fn parse_expr(&mut self, idx: ExpressionId) -> Result<ExpressionMeta> {
         let mut lexer = self.line_lexer(idx)?;
         let first = *lexer.multipeek_res()?;
 
-        let mut ident = None;
-        let t = match first.1 {
+        let expr = match first.1 {
             Token::Ident => match lexer.multipeek_res() {
                 //Function definition
                 Ok((_, Token::LParen)) => {
@@ -184,134 +204,142 @@ impl Expressions {
                             (_, Token::Comma) => {}
                             (_, Token::RParen) => {
                                 if lexer.borrow_mut().multipeek().is_none() {
-                                    break None;
+                                    break ();
                                 }
                                 lexer.borrow_mut().catch_up();
-                                ident = Some(first.0.into());
-                                break Some(ExpressionType::Fn {
+                                let mut pm = Parser::new(lexer);
+                                pm.parse()?;
+                                let rhs = pm.ast;
+                                return Ok(ExpressionMeta::Fn {
                                     name: first.0.into(),
                                     params: argv,
+                                    rhs,
                                 });
                             }
-                            (_, _) => break None,
+                            (_, _) => break (),
                         };
                     }
                 }
                 //[Ident]=[stuff]
                 Ok((_, Token::Eq)) => {
                     lexer.borrow_mut().catch_up();
-                    ident = Some(first.0.into());
-                    Some(ExpressionType::Var(first.0.into()))
+                    let mut pm = Parser::new(lexer);
+                    pm.parse()?;
+                    let rhs = pm.ast;
+
+                    return Ok(ExpressionMeta::Var {
+                        ident: first.0.into(),
+                        rhs,
+                    });
                 }
-                _ => None,
+                _ => (),
             },
-            _ => None,
+            _ => (),
         };
-        let mut meta = ExpressionMeta::INVALID;
-        if let Some(typ) = t {
-            meta.expression_type = Some(typ);
-        } else {
+
+        Ok(ExpressionMeta::Eq({
             //Default case, equation
             let mut pm = Parser::new(lexer);
 
             pm.parse()?;
 
-            let (ast, lex) = pm.split();
+            let (lhs, mut lex) = pm.split();
 
-            lexer = lex;
-            let next = lexer.next_res();
-            if let Ok(n) = next {
-                let s = match n.1 {
-                    Token::Gt => EquationType::InEq(Comparison::Greater),
-                    Token::Ge => EquationType::InEq(Comparison::GreaterEq),
-                    Token::Lt => EquationType::InEq(Comparison::Less),
-                    Token::Le => EquationType::InEq(Comparison::LessEq),
-                    Token::Eq => EquationType::Implicit,
-                    t => {
-                        bad_token!(n.0, t, "determining expression type")
-                    }
-                };
-                meta.latest_lhs_ast = Some(ast);
-                meta.expression_type = Some(ExpressionType::Eq { eq_type: s });
-            } else {
-                meta.latest_lhs_ast = Some(ast);
-                meta.expression_type = Some(ExpressionType::Eq {
-                    eq_type: EquationType::Explicit,
-                });
-            };
-        }
+            match lex.next() {
+                Some((n, t)) => {
+                    let mut pm = Parser::new(lex);
+                    pm.parse()?;
+                    let rhs = pm.ast;
 
-        Ok((lexer, ident, meta))
-    }
-    pub fn parse_all(&mut self) -> HashMap<ExpressionId, String> {
-        self.meta.clear();
-        let keys = self.storage.keys().cloned().collect::<Vec<_>>();
-        let mut errors = HashMap::new();
-        for i in keys {
-            match self.parse_expr(i) {
-                Ok((ident, meta)) => {
-                    self.meta.insert(i, meta);
-                    ident.map(|ident| self.ident_lookup.insert(ident, i));
+                    let comp = match t {
+                        Token::Gt => Comparison::Greater,
+
+                        Token::Ge => Comparison::Greater,
+
+                        Token::Lt => Comparison::Greater,
+
+                        Token::Le => Comparison::Greater,
+
+                        Token::Eq => Comparison::Greater,
+
+                        t => {
+                            bad_token!(n, t, "determining expression type")
+                        }
+                    };
+
+                    Equation::Explicit { lhs, rhs, comp }
                 }
-                Err(e) => {
-                    errors.insert(i, e.to_string());
-                }
+                None => Equation::Implicit { lhs },
             }
-        }
-        errors
-    }
-    pub fn parse_expr(&mut self, idx: ExpressionId) -> Result<(Option<Ident>, ExpressionMeta)> {
-        let (mut lex, ident, mut meta) = self.scan_expression_type(idx)?;
-        let mut rhs = None;
-        if let Some(_) = lex.peek_next() {
-            let mut pm = Parser::new(lex);
-            pm.parse()?;
-            rhs = Some(pm.ast);
-        }
-        {
-            meta.latest_rhs_ast = rhs;
-        }
-
-        Ok((ident, meta))
+        }))
     }
 }
 
 use std::{cell::RefCell, fmt::Debug};
 
-#[derive(Debug, Clone)]
-pub struct ExpressionMeta {
-    pub latest_rhs_ast: Option<AST>,
-    pub latest_lhs_ast: Option<AST>,
-    pub compiled_versions: RefCell<Option<HashMap<IRType, IRSegment>>>,
-    pub expression_type: Option<ExpressionType>,
+#[derive(Debug)]
+pub enum CompiledEquation {
+    Implicit {
+        lhs: IRSegment,
+    },
+    Explicit {
+        lhs: IRSegment,
+        rhs: IRSegment,
+        comp: Comparison,
+    },
 }
-impl ExpressionMeta {
-    pub fn has_rhs_ast(&self) -> bool {
-        self.latest_rhs_ast.is_some()
+
+#[derive(Clone)]
+pub enum ExpressionMeta {
+    Fn {
+        name: Ident,
+        params: ThinVec<Ident>,
+        rhs: AST,
+    },
+    Var {
+        ident: Ident,
+        rhs: AST,
+    },
+    Eq(Equation),
+}
+
+impl Debug for ExpressionMeta {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Fn { name, params, rhs } => {
+                let mut s = format!("Fn {}(", name.as_str());
+                for p in params {
+                    s.push_str(p.as_str());
+                    s.push(',');
+                }
+                let _ = s.pop();
+                f.write_fmt(format_args!("{})", s))
+            }
+            Self::Var { ident, rhs } => f.debug_tuple("Var").field(&ident.as_str()).finish(),
+            Self::Eq(eq) => f.debug_struct("Eq").field("eq_type", eq).finish(),
+        }
     }
-    pub fn has_lhs_ast(&self) -> bool {
-        self.latest_lhs_ast.is_some()
-    }
-    pub fn has_type(&self) -> bool {
-        self.expression_type.is_some()
-    }
-    pub fn invalidate(&mut self) {
-        *self = Self::INVALID;
-    }
-    pub const INVALID: Self = Self {
-        latest_lhs_ast: None,
-        latest_rhs_ast: None,
-        compiled_versions: RefCell::new(None),
-        expression_type: None,
-    };
+}
+
+#[derive(Debug, Clone)]
+pub enum Equation {
+    Implicit {
+        lhs: AST,
+    },
+    Explicit {
+        lhs: AST,
+        rhs: AST,
+        comp: Comparison,
+    },
 }
 
 #[derive(Clone)]
 pub enum ExpressionType {
     Fn { name: Ident, params: ThinVec<Ident> },
     Var(Ident),
-    Eq { eq_type: EquationType },
+    Eq(EquationType),
 }
+
 impl Debug for ExpressionType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -325,7 +353,7 @@ impl Debug for ExpressionType {
                 f.write_fmt(format_args!("{})", s))
             }
             Self::Var(arg0) => f.debug_tuple("Var").field(&arg0.as_str()).finish(),
-            Self::Eq { eq_type } => f.debug_struct("Eq").field("eq_type", eq_type).finish(),
+            Self::Eq(eq_type) => f.debug_struct("Eq").field("eq_type", eq_type).finish(),
         }
     }
 }
@@ -335,61 +363,4 @@ pub enum EquationType {
     Implicit,
     Explicit,
     InEq(Comparison),
-}
-
-impl ExpressionProvider for Expressions {
-    fn get_ident_id(
-        &self,
-        ident: &Ident,
-    ) -> Result<crate::lang::expression_provider::ExpressionId> {
-        self.ident_lookup
-            .get(ident)
-            .map(|a| *a)
-            .context("ident not found by get_ident_id")
-    }
-
-    fn expression_type(
-        &self,
-        id: crate::lang::expression_provider::ExpressionId,
-    ) -> Result<&ExpressionType> {
-        Ok(self
-            .meta
-            .get(&id)
-            .map(|a| {
-                a.expression_type
-                    .as_ref()
-                    .context("expression had no expression type")
-            })
-            .context("expression did not exist!")??)
-    }
-
-    fn fn_ast(
-        &self,
-        id: crate::lang::expression_provider::ExpressionId,
-    ) -> Result<(&ThinVec<Ident>, &AST)> {
-        let meta = self.meta.get(&id).context("could not get expression")?;
-        if let ExpressionType::Fn { ref params, .. } = meta
-            .expression_type
-            .as_ref()
-            .context("Expression was not processed")?
-        {
-            return Ok((
-                params,
-                meta.latest_rhs_ast
-                    .as_ref()
-                    .context("tried to get expression AST but it was't parsed yet")?,
-            ));
-        }
-        bail!("Tried to get function AST of a non-function Ident")
-    }
-
-    fn ident_ast(&self, id: crate::lang::expression_provider::ExpressionId) -> Result<&AST> {
-        Ok(self
-            .meta
-            .get(&id)
-            .context("could not get expression")?
-            .latest_rhs_ast
-            .as_ref()
-            .context("Ident does not have valid LHS AST")?)
-    }
 }

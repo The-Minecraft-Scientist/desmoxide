@@ -2,9 +2,9 @@ use std::collections::HashMap;
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use desmoxide::{
-    graph::expressions::Expressions,
+    graph::expressions::{ExpressionId, Expressions},
     interop::{Expression, GraphState},
-    lang::{ast::Ident, compiler::frontend::Frontend, expression_provider::ExpressionId},
+    lang::{ast::Ident, compiler::frontend::Frontend},
 };
 
 fn benchmark_compile(c: &mut Criterion) {
@@ -14,7 +14,7 @@ fn benchmark_compile(c: &mut Criterion) {
     let p = parse_graph_exprs(exprs);
     c.bench_function("simplex compile", |b| {
         b.iter_batched_ref(
-            || Frontend::new(&p),
+            || Frontend::new(&p.meta, &p.ident_lookup),
             |a| a.direct_compile_fn(&Ident::from(black_box("s_{implex4D}"))),
             criterion::BatchSize::SmallInput,
         )

@@ -9,22 +9,28 @@ use super::{
         IRType, Id,
     },
 };
-use crate::lang::expression_provider::{ExpressionId, ExpressionProvider};
-use crate::{compiler_error, graph::expressions::ExpressionType, permute};
+use crate::graph::expressions::{ExpressionId, ExpressionMeta};
+use crate::{compiler_error, permute};
+
 use anyhow::{bail, Context, Result};
 
 use thin_vec::ThinVec;
 
 #[derive(Debug)]
 pub struct Frontend<'borrow> {
-    pub ctx: &'borrow dyn ExpressionProvider,
+    pub exprs: &'borrow HashMap<ExpressionId, ExpressionMeta>,
+    pub idents: &'borrow HashMap<Ident, ExpressionId>,
     pub fn_cache: HashMap<(u32, Vec<IRType>), Arc<IRSegment>>,
 }
 
 impl<'borrow> Frontend<'borrow> {
-    pub fn new(ctx: &'borrow dyn ExpressionProvider) -> Self {
+    pub fn new(
+        exprs: &'borrow HashMap<ExpressionId, ExpressionMeta>,
+        idents: &'borrow HashMap<Ident, ExpressionId>,
+    ) -> Self {
         Self {
-            ctx,
+            exprs,
+            idents,
             fn_cache: HashMap::with_capacity(10),
         }
     }
@@ -79,6 +85,7 @@ impl<'borrow> Frontend<'borrow> {
         )?;
         frame.pop_scope();
         segment.ret = ret_id;
+
         Ok(segment)
     }
     pub fn invalidate_cache(&mut self) {
@@ -93,21 +100,42 @@ impl<'borrow> Frontend<'borrow> {
         if let Some(compiled) = self.fn_cache.get(&k) {
             return Ok(Arc::clone(compiled));
         }
-        let (args, expr) = self
-            .ctx
-            .fn_ast(id)
-            .context("getting function expression AST")?;
-        let a = Arc::new(self.compile_fn(k.1.clone(), args, expr)?);
-        self.fn_cache.insert((*id, k.1), Arc::clone(&a));
-        Ok(a)
+        if let ExpressionMeta::Fn {
+            name,
+            params: args,
+            rhs: expr,
+        } = self
+            .exprs
+            .get(&id)
+            .context("getting function expression AST")?
+        {
+            let a = Arc::new(self.compile_fn(k.1.clone(), args, expr)?);
+            self.fn_cache.insert((*id, k.1), Arc::clone(&a));
+            Ok(a)
+        } else {
+            bail!("expected function at id: {:?}", id)
+        }
     }
     pub fn direct_compile_fn(&mut self, i: &Ident) -> Result<IRSegment> {
-        let (args, ast) = self
-            .ctx
-            .fn_ast_by_name(i)
-            .context("getting AST from expression provider")?;
-        let v = vec![IRType::Number; args.len()];
-        self.compile_fn(v, args, ast)
+        if let ExpressionMeta::Fn {
+            name,
+            params: args,
+            rhs: expr,
+        } = self
+            .exprs
+            .get(
+                self.idents
+                    .get(i)
+                    .context(format!("could not find ident {:?}", i))?,
+            )
+            .context("getting function expression AST")?
+        {
+            let v = vec![IRType::Number; args.len()];
+
+            self.compile_fn(v, args, expr)
+        } else {
+            bail!("expected function at id: {:?}", i)
+        }
     }
     fn rec_build_ir(
         &mut self,
@@ -124,13 +152,18 @@ impl<'borrow> Frontend<'borrow> {
                     if let Some(t) = frame.map_ident(s.as_str()) {
                         t
                     } else {
-                        let a = self
-                            .ctx
-                            .ident_ast_by_name(&s)
-                            .context("getting ident AST")?;
-                        let out = self.rec_build_ir(segment, a.root.unwrap(), a, frame)?;
-                        frame.insert_top(s.as_str(), out);
-                        out
+                        if let ExpressionMeta::Var { rhs: expr, .. } = self
+                            .exprs
+                            .get(self.idents.get(s).context("getting ident id")?)
+                            .context("getting function expression AST")?
+                        {
+                            let out =
+                                self.rec_build_ir(segment, expr.root.unwrap(), expr, frame)?;
+                            frame.insert_top(s.as_str(), out);
+                            out
+                        } else {
+                            bail!("expected var at id: {:?}", s)
+                        }
                     }
                 }
             },
@@ -219,14 +252,15 @@ impl<'borrow> Frontend<'borrow> {
                         .place(IROp::Binary(id, rhs, BinaryOp::Mul)));
                 }
 
-                if let Ok(t) = self.ctx.expression_type_by_name(ident) {
+                let id = self
+                    .idents
+                    .get(ident)
+                    .context("could not get id for ident")?;
+
+                if let Some(t) = self.exprs.get(id) {
                     match t {
                         //wackscope
-                        ExpressionType::Var(i) => {
-                            let ast = self
-                                .ctx
-                                .ident_ast_by_name(i)
-                                .context("AST not present for existent ident expression")?;
+                        ExpressionMeta::Var { ident, rhs: ast } => {
                             let lhs = self.rec_build_ir(
                                 segment,
                                 ast.root.context("AST was not complete")?,
@@ -240,13 +274,13 @@ impl<'borrow> Frontend<'borrow> {
                             )));
                         }
                         //function
-                        ExpressionType::Fn { .. } => {
-                            let id = self
-                                .ctx
-                                .get_ident_id(ident)
-                                .context("AST not present for existent function")?;
-                            let f = self.compile_and_cache_fn(id, vec![rhs.t()])?;
-                            let dep = segment.push_dependency(f, id);
+                        ExpressionMeta::Fn {
+                            name,
+                            params,
+                            rhs: expr,
+                        } => {
+                            let f = self.compile_and_cache_fn(*id, vec![rhs.t()])?;
+                            let dep = segment.push_dependency(f, *id);
                             let id = segment.instructions.place(IROp::FnCall(dep));
                             let _ = segment.instructions.place(IROp::FnArg(rhs));
                         }
@@ -271,11 +305,8 @@ impl<'borrow> Frontend<'borrow> {
                 for arg in a {
                     args.push(self.rec_build_ir(segment, *arg, expr, frame)?);
                 }
-                let expr_id = self
-                    .ctx
-                    .get_ident_id(f)
-                    .context("could not get expression id")?;
-                let Ok(ExpressionType::Fn { .. }) = self.ctx.expression_type(expr_id) else {
+                let expr_id = self.idents.get(f).context("could not get expression id")?;
+                let Some(ExpressionMeta::Fn { .. }) = self.exprs.get(expr_id) else {
                     compiler_error!(
                         node,
                         "identifier \"{}\" exists but is not a function!",
@@ -283,10 +314,10 @@ impl<'borrow> Frontend<'borrow> {
                     )
                 };
                 let func = self.compile_and_cache_fn(
-                    expr_id,
+                    *expr_id,
                     args.iter().map(|id| id.t()).collect::<Vec<_>>(),
                 )?;
-                let id = segment.push_dependency(func, expr_id);
+                let id = segment.push_dependency(func, *expr_id);
                 let id = segment.instructions.place(IROp::FnCall(id));
                 let _ = segment
                     .instructions

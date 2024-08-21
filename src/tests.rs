@@ -1,7 +1,7 @@
 use crate::{
-    graph::expressions::Expressions,
+    graph::expressions::{ExpressionId, Expressions},
     interop::{Expression, GraphState},
-    lang::{ast::Ident, compiler::frontend::Frontend, expression_provider::ExpressionId},
+    lang::{ast::Ident, compiler::frontend::Frontend},
 };
 use std::{collections::HashMap, time::Instant};
 
@@ -25,7 +25,7 @@ fn test_compile_fn(path: &'static str, func: &'static str) {
     let graph = serde_json::de::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
     let exprs = get_exprs(&graph);
     let p = parse_graph_exprs(exprs);
-    let mut f = Frontend::new(&p);
+    let mut f = Frontend::new(&p.meta, &p.ident_lookup);
     let t = Instant::now();
     let val = f.direct_compile_fn(&Ident::from(func)).unwrap();
     let after = Instant::now();
