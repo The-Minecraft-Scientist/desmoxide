@@ -7,7 +7,7 @@ use std::collections::HashMap;
 pub struct Graph {
     hash: String,
     #[serde(rename = "parent_hash")]
-    parent_hash: String,
+    parent_hash: Option<String>,
     thumb_url: String,
     state_url: String,
     title: String,
